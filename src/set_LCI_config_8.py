@@ -10,6 +10,7 @@ date = ''.join((list(str(date.today()).split("-"))[::-1]))
 
 max_iter = 1000
 n = 8
+tag = '8-nodes'
 num_inputs = 6
 num_outputs = 2
 tol = 1e-8
@@ -21,7 +22,7 @@ data_folder = os.path.abspath(os.path.join(get_project_root(), "data", "inferred
 
 config_dict = {}
 config_dict["n"] = n
-config_dict["N"] = 10
+config_dict["N"] = 12
 config_dict["num_inputs"] = num_inputs
 config_dict["num_outputs"] = num_outputs
 W_inp = np.zeros((n, num_inputs))
@@ -39,13 +40,13 @@ config_dict["sigma_inp"] = sigma_inp
 config_dict["inp_connectivity_mask"] = W_inp.tolist()
 config_dict["rec_connectivity_mask"] = np.ones((n, n)).tolist()
 config_dict["out_connectivity_mask"] = W_out.tolist()
-config_dict["seed"] = np.random.randint(100000)
+config_dict["seed"] = None
 config_dict["max_iter"] = max_iter
 config_dict["tol"] = tol
 config_dict["lr"] = lr
 config_dict["lambda_w"] = lambda_w
 config_dict["data_folder"] = data_folder
-# config_dict["tag"] = tag
+config_dict["tag"] = tag
 json_obj = json.dumps(config_dict, indent=4)
-outfile = open(os.path.join(get_project_root(), "data", "configs", f"LCI_config.json"), mode="w")
+outfile = open(os.path.join(get_project_root(), "data", "configs", f"LCI_config_{tag}.json"), mode="w")
 outfile.write(json_obj)

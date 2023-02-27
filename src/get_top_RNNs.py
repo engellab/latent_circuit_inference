@@ -32,7 +32,6 @@ def R2(x, y):
 # networks_sorted = (rnn_dj & "activation_name = 'relu'").fetch('timestamp', order_by='mse_score')
 # print(networks_sorted[:50])
 
-
 # other way
 data_path = os.path.join("../", "../", "rnn_coach", "data", "trained_RNNs", "CDDM")
 folders = os.listdir(data_path)

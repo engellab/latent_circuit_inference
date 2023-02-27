@@ -100,8 +100,6 @@ class LCAnalyzer(PerformanceAnalyzerCDDM):
         return G.painter.figure
 
     def plot_selection_vectors(self, Q, LA_data_lc, LA_data_RNN):
-        from matplotlib.patches import Patch
-        var_names = ["ctx m", "ctx c", "mR", "mL", "cR", "cL", "OutR", "OutL"]
         error_kw = {"ecolor": colors[5], "elinewidth": 1, "capsize": 3, "capthick": 1, "barsabove": True}
         fig, ax = plt.subplots(2, 1, figsize=(4, 8))
         fig.suptitle("Selection vectors", fontsize=16)
@@ -121,18 +119,18 @@ class LCAnalyzer(PerformanceAnalyzerCDDM):
             colorlist2 = [violet for i in np.arange(8)]
             rects1 = ax[i].bar(np.arange(len(self.labels)) - width / 2,
                                (avg_pr_l_RNN),
-                               tick_label=var_names,
+                               tick_label=self.labels,
                                yerr=np.std(projected_l_RNN, axis=0),
                                color=colorlist1, alpha=0.95,
                                ecolor=orange, edgecolor='k', width=width, error_kw=error_kw, label=f"RNN")
             rects2 = ax[i].bar(np.arange(len(self.labels)) + width / 2,
                                (avg_pr_l_circuit),
-                               tick_label=var_names,
+                               tick_label=self.labels,
                                yerr=np.std(projected_l_circuit, axis=0),
                                color=colorlist2, alpha=0.95,
                                ecolor=orange, edgecolor='k', width=width, error_kw=error_kw, label=f"Latent Circuit")
             ax[i].set_ylim([-0.89, 0.89])
-            ax[i].set_xticks(np.arange(8), self.labels, rotation=45)
+            ax[i].set_xticks(np.arange(len(self.labels)), self.labels, rotation=45)
             ax[i].set_yticks([-0.7, 0.7])
             ax[i].spines['right'].set_visible(False)
             ax[i].spines['top'].set_visible(False)

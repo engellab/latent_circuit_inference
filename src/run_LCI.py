@@ -1,7 +1,6 @@
 import sys
 sys.path.append("../../")
 import numpy as np
-from matplotlib import pyplot as plt
 import json
 import pickle
 import os
@@ -16,6 +15,7 @@ from latent_circuit_inference.src.LatentCircuitFitter import *
 from latent_circuit_inference.src.LCAnalyzer import *
 from latent_circuit_inference.src.utils import *
 from latent_circuit_inference.src.circuit_vizualization import *
+from matplotlib import pyplot as plt
 
 def mse_scoring(x, y):
     return np.mean((x - y) ** 2)
@@ -24,38 +24,37 @@ def R2(x, y):
     return 1.0 - mse_scoring(x, y)/np.var(y)
 
 #given the folder, open up the files:
-RNN_folder = 'exemplar_RNN'
-tag = '8-nodes'
+RNN_folder = sys.argv[1]
+tag = sys.argv[2]
+disp = False
 RNN_folder_full_path = os.path.join("../", "../", "rnn_coach", "data", "trained_RNNs", "CDDM", RNN_folder)
-rnn_data = pickle.load(open(os.path.join(RNN_folder_full_path, f"params.pkl"), "rb+"))
-LCI_config_file = json.load(open(os.path.join("../", "data", "configs", f"LCI_config.json"), mode="r", encoding='utf-8'))
-n_steps = 750
-n_inputs = 6
-n_outputs = 2
-task_data = {"cue_on": 0, "cue_off": n_steps,
-             "stim_on": int(n_steps // 3), "stim_off": n_steps,
-             "dec_on": int(2 * n_steps // 3), "dec_off": n_steps,
-             "n_steps": n_steps, "n_inputs": n_inputs, "n_outputs": n_outputs}
-coherences = np.linspace(-1, 1, 11)
-task_data["coherences"] = coherences
-mask = np.concatenate([np.arange(int(n_steps // 3)), int(2 * n_steps // 3) + np.arange(int(n_steps // 3))])
-task_data["mask"] = mask
-
-# defining RNN:
-activation_name = 'relu'
-RNN_N = 100
-activation_RNN = lambda x: torch.maximum(x, torch.tensor(0))
-dt = 1
-tau = 10
+mse_score_RNN = os.listdir(RNN_folder_full_path)[0].split("_")[0]
+rnn_config = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_config.json"), "rb+"))
+rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_CDDM.json"), "rb+"))
+LCI_config_file = json.load(open(os.path.join("../", "data", "configs", f"LCI_config_{tag}.json"), mode="r", encoding='utf-8'))
+task_data = rnn_config["task_params"]
 
 for trial in range(30):
-    connectivity_density_rec = rnn_data["connectivity_density_rec"]
-    spectral_rad = rnn_data["sr"]
-    sigma_inp = rnn_data["sigma_inp"]
-    sigma_rec = rnn_data["sigma_rec"]
+    # defining RNN:
+    activation_name = rnn_config["activation"]
+    RNN_N = rnn_config["N"]
+
+    if activation_name == 'relu':
+        activation_RNN = lambda x: torch.maximum(x, torch.tensor(0))
+    elif activation_name == 'tanh':
+        activation_RNN = torch.tanh
+    elif activation_name == 'sigmoid':
+        activation_RNN = lambda x: 1/(1 + torch.exp(-x))
+    elif activation_name == 'softplus':
+        activation_RNN = lambda x: torch.log(1 + torch.exp(5 * x))
+    dt = rnn_config["dt"]
+    tau = rnn_config["tau"]
+    connectivity_density_rec = rnn_config["connectivity_density_rec"]
+    spectral_rad = rnn_config["sr"]
+    sigma_inp = rnn_config["sigma_inp"]
+    sigma_rec = rnn_config["sigma_rec"]
     seed = np.random.randint(1000000)
     print(f"seed: {seed}")
-    task_data["seed"] = seed
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -126,8 +125,8 @@ for trial in range(30):
                                  optimizer=optimizer, criterion=criterion,
                                  lambda_w=lambda_w)
 
-    lc_inferred, train_losses, val_losses, net_params = fitter.run_training()
-
+    lc_inferredx, train_losses, val_losses, net_params = fitter.run_training()
+    # net_params = pickle.load(open("/Users/tolmach/Documents/GitHub/latent_circuit_inference/data/inferred_LCs/0.0073745_20230222-064341/0.9082026200317382_LC_12-nodes/0.9082026200317382_LC_params.pkl", 'rb+'))
     # defining circuit
     n = LCI_config_file["n"]
     U = net_params["U"]
@@ -159,11 +158,13 @@ for trial in range(30):
     RNN.y = np.zeros(n)
 
     # defining analyzer
-    node_labels = ['ctx m', "ctx c", "mR", "mL", "cR", "cL", "OutR", "OutL"]
+    if tag == '8-nodes':
+        node_labels = ['ctx m', "ctx c", "mR", "mL", "cR", "cL", "OutR", "OutL"]
+    elif tag == '12-nodes':
+        node_labels = ['ctx m', "ctx c", "mR", "mL", "cR", "cL", "mRx", "mLx", "cLx", "cRx", "OutR", "OutL"]
     analyzer = LCAnalyzer(circuit, labels=node_labels)
     input_batch_valid, target_batch_valid, conditions_valid = task.get_batch()
-    mask = np.concatenate([np.arange(int(n_steps // 3)), int(2 * n_steps // 3) + np.arange(int(n_steps // 3))])
-    task_data["mask"] = mask
+    mask = np.array(rnn_config["mask"])
 
     #MSE mse_score_RNN
     score_function = lambda x, y: np.mean((x - y) ** 2)
@@ -199,15 +200,15 @@ for trial in range(30):
     w_rec = net_params["W_rec"]
     fig_w_rec = analyzer.plot_recurrent_matrix()
     datasaver.save_figure(fig_w_rec, f"{r2_tot}_LC_wrec.png")
-    # plt.show()
+    if disp: plt.show()
 
     fig_w_rec_comparison = analyzer.plot_recurrent_matrix_comparison(w_rec_bar=w_rec_bar)
     datasaver.save_figure(fig_w_rec_comparison, f"{r2_tot}_LC_wrec_comparison.png")
-    # plt.show()
+    if disp: plt.show()
 
-    fig_circuit_graph = analyzer.plot_circuit_graph()
-    datasaver.save_figure(fig_circuit_graph, f"{r2_tot}_circuit_graph.png")
-    # plt.show()
+    # fig_circuit_graph = analyzer.plot_circuit_graph()
+    # datasaver.save_figure(fig_circuit_graph, f"{r2_tot}_circuit_graph.png")
+    # if disp: plt.show()
 
     print(f"Plotting random trials")
     inds = np.random.choice(np.arange(input_batch_valid.shape[-1]), 12)
@@ -215,14 +216,14 @@ for trial in range(30):
     targets = target_batch_valid[..., inds]
     fig_trials = analyzer.plot_trials(inputs, targets, mask, sigma_rec=sigma_rec, sigma_inp=sigma_inp)
     datasaver.save_figure(fig_trials, f"{r2_tot}_LC_random_trials.png")
-    # plt.show()
+    if disp: plt.show()
 
     num_levels = len(task_data["coherences"])
     analyzer.calc_psychometric_data(task, mask, num_levels=num_levels, num_repeats=31, sigma_rec=0.03, sigma_inp=0.03)
     fig_psycho = analyzer.plot_psychometric_data()
     datasaver.save_figure(fig_psycho, f"{r2_tot}_LC_psychometric.png")
     datasaver.save_data(analyzer.psychometric_data, f"{r2_tot}_psycho_data.pkl")
-    # plt.show()
+    if disp: plt.show()
 
     print(f"Analyzing fixed points")
     dsa = DynamicSystemAnalyzerCDDM(circuit)
@@ -240,4 +241,10 @@ for trial in range(30):
     datasaver.save_figure(fig_LA3D, f"{r2_tot}_LC_LA3D.png")
     datasaver.save_data(dsa.fp_data, f"{r2_tot}_fp_data.pkl")
     datasaver.save_data(dsa.LA_data, f"{r2_tot}_LA_data.pkl")
-    # plt.show()
+    if disp: plt.show()
+
+    LA_data_lc = pickle.load(open(os.path.join(data_folder, f"{r2_tot}_LA_data.pkl"), "rb+"))
+    LA_data_RNN = pickle.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_LA_data.pkl"), "rb+"))
+    fig_selection_vects = analyzer.plot_selection_vectors(Q, LA_data_lc, LA_data_RNN)
+    datasaver.save_figure(fig_selection_vects, f"{r2_tot}_selection_vects_comparison.png")
+    if disp: plt.show()

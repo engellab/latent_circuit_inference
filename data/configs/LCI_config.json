@@ -1,6 +1,6 @@
 {
     "n": 8,
-    "N": 10,
+    "N": 12,
     "num_inputs": 6,
     "num_outputs": 2,
     "W_inp": [
@@ -266,8 +266,8 @@
             1.0
         ]
     ],
-    "seed": 89557,
-    "max_iter": 500,
+    "seed": 35045,
+    "max_iter": 1000,
     "tol": 1e-08,
     "lr": 0.05,
     "lambda_w": 0.08,
