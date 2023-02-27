@@ -3,3 +3,5 @@
 *png
 *pkl
 /data/inferred_LCs/*
+*.png
+*.pkl
