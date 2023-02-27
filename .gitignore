@@ -5,3 +5,5 @@
 /data/inferred_LCs/*
 *.png
 *.pkl
+/data/
+/data/*
