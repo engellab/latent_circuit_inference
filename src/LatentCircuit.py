@@ -1,5 +1,7 @@
 import sys
 import os
+import geoopt
+from geoopt import Stiefel
 sys.path.insert(0, "../")
 import torch
 from torch.nn.utils.parametrizations import orthogonal
@@ -47,8 +49,8 @@ class LatentCircuit(torch.nn.Module):
         self.recurrent_layer = torch.nn.Linear(self.n, self.n, bias=False, device=self.device)
         self.output_layer = torch.nn.Linear(self.n, self.num_outputs, bias=False, device=self.device)
 
-        self.input_layer.weight.data = W_inp
-        self.output_layer.weight.data = W_out
+        self.input_layer.weight.data = W_inp.float().to(device=self.device)
+        self.output_layer.weight.data = W_out.float().to(device=self.device)
         self.recurrent_layer.weight.data = torch.zeros((self.n, self.n)).float().to(device=self.device)
         self.inp_connectivity_mask = torch.Tensor(inp_connectivity_mask).to(self.device)
         self.rec_connectivity_mask = torch.Tensor(rec_connectivity_mask).to(self.device)
@@ -57,27 +59,8 @@ class LatentCircuit(torch.nn.Module):
         self.recurrent_layer.weight.data *= (self.rec_connectivity_mask)
         self.output_layer.weight.data *= (self.out_connectivity_mask)
         self.x = torch.zeros(self.n, device=self.device)
-
-        # # # if you want to have w_inp and w_out frozen
-        # for param in self.input_layer.parameters():
-        #     param.requires_grad = False
-        # for param in self.output_layer.parameters():
-        #     param.requires_grad = False
-
-        q = torch.rand(self.n, self.N, device=self.device)
-        q = self.make_orthonormal(q)
-        self.q = torch.nn.Parameter(q, requires_grad=True)
-
-    #     self.A = torch.nn.Parameter(torch.rand(self.N, self.N, device=torch.device('cpu'), generator=self.random_generator), requires_grad=True).to(self.device)
-    #     self.Q = (torch.eye(self.N, device=self.device) - (self.A - self.A.t()) / 2) @ torch.inverse(torch.eye(self.N, device=self.device) + (self.A - self.A.t()) / 2)
-    #     self.q = self.Q[:self.n, :]
-    #     self.q = self.q.to(device=self.device)
-    #
-    # def make_orthonormal(self):
-    #     skew = (self.A - self.A.T) / 2
-    #     eye = torch.eye(self.N, device=self.device)
-    #     o = (eye - skew) @ torch.inverse(eye + skew)
-    #     self.q = o[:self.n, :]
+        manifold = geoopt.Stiefel()
+        self.q = geoopt.ManifoldParameter(manifold.random(self.N, self.n)).to(self.device)
 
     def make_orthonormal(self, q=None):
         if q is None:
@@ -95,6 +78,7 @@ class LatentCircuit(torch.nn.Module):
             return U @ S @ Vh
 
     def set_projection(self, RNN, Task):
+        print("setting projection of RNN traces on the lower subspace")
         # do the PCA on RNN traces to lower the dimensionality!
         input_batch, target_batch, conditions_batch = Task.get_batch()
         sigma_rec = deepcopy(RNN.sigma_rec)
@@ -147,7 +131,7 @@ class LatentCircuit(torch.nn.Module):
                         )
             states = torch.cat((states, state_new.unsqueeze_(1)), 1)
         outputs = torch.swapaxes(self.output_layer(states), 0, -1)
-        states_embedded = states @ self.q
+        states_embedded = states @ self.q.T
         states_embedded = torch.swapaxes(states_embedded, 0, -1)
         return states_embedded, outputs
 
@@ -165,7 +149,8 @@ class LatentCircuit(torch.nn.Module):
             param_dict["U"] = deepcopy(self.projection.weight.data.cpu().detach().numpy())
         except:
             param_dict["U"] = None
-        param_dict["q"] = deepcopy(self.q.cpu().detach().numpy())
+        param_dict["q"] = deepcopy(self.q.data.cpu().detach().numpy())
+        # param_dict["q"] = deepcopy(self.q.cpu().detach().numpy())
         # param_dict["A"] = deepcopy(self.A.cpu().detach().numpy())
         # Q = (torch.eye(self.N, device=self.device) - (self.A - self.A.t()) / 2) @ torch.inverse(
         #     torch.eye(self.N, device=self.device) + (self.A - self.A.t()) / 2)

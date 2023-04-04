@@ -1,6 +1,5 @@
 import sys
 from copy import deepcopy
-
 sys.path.append("../../")
 from rnn_coach.src.PerformanceAnalyzer import *
 from latent_circuit_inference.src.utils import *
@@ -109,10 +108,10 @@ class LCAnalyzer(PerformanceAnalyzerCDDM):
                            Patch(facecolor=violet, alpha=0.95, edgecolor='k', label='Latent Circuit')]
 
         for i, ctx in enumerate(["motion", "color"]):
-            projected_l_RNN = (np.array(LA_data_RNN[ctx]["l"][:5:-5, :])) @ Q.T
+            projected_l_RNN = (np.array(LA_data_RNN[ctx]["l"][:10:-10, :])) @ Q.T
             avg_pr_l_RNN = np.mean(projected_l_RNN, axis=0).flatten()
             avg_pr_l_RNN = avg_pr_l_RNN / np.linalg.norm(avg_pr_l_RNN)
-            projected_l_circuit = (np.array(LA_data_lc[ctx]["l"][:5:-5, :]))
+            projected_l_circuit = (np.array(LA_data_lc[ctx]["l"][:10:-10, :]))
             avg_pr_l_circuit = np.mean(projected_l_circuit, axis=0).flatten()
             avg_pr_l_circuit = avg_pr_l_circuit / np.linalg.norm(avg_pr_l_circuit)
             colorlist1 = [bluish for i in np.arange(8)]

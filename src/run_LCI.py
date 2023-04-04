@@ -1,4 +1,8 @@
 import sys
+from copy import deepcopy
+from geoopt.optim import RiemannianAdam
+sys.path.append("./")
+sys.path.append("../")
 sys.path.append("../../")
 import numpy as np
 import json
@@ -10,6 +14,7 @@ from rnn_coach.src.DynamicSystemAnalyzer import *
 from rnn_coach.src.RNN_numpy import *
 from rnn_coach.src.Task import *
 from rnn_coach.src.DataSaver import *
+from src.utils import jsonify
 from latent_circuit_inference.src.LatentCircuit import *
 from latent_circuit_inference.src.LatentCircuitFitter import *
 from latent_circuit_inference.src.LCAnalyzer import *
@@ -23,18 +28,23 @@ def mse_scoring(x, y):
 def R2(x, y):
     return 1.0 - mse_scoring(x, y)/np.var(y)
 
+print(f"system arguments: {sys.argv}")
 #given the folder, open up the files:
-RNN_folder = sys.argv[1]
-tag = sys.argv[2]
+# RNN_folder = sys.argv[1]
+RNN_folder = "CDDM_relu;N=100;lmbdr=0.0;lmbdo=0.3_0.0069041_20230401-135134"
+tag = '8nodes'
+
 disp = False
 RNN_folder_full_path = os.path.join("../", "../", "rnn_coach", "data", "trained_RNNs", "CDDM", RNN_folder)
-mse_score_RNN = os.listdir(RNN_folder_full_path)[0].split("_")[0]
+mse_score_RNN = os.listdir(RNN_folder_full_path)[2].split("_")[0]
 rnn_config = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_config.json"), "rb+"))
 rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_CDDM.json"), "rb+"))
 LCI_config_file = json.load(open(os.path.join("../", "data", "configs", f"LCI_config_{tag}.json"), mode="r", encoding='utf-8'))
 task_data = rnn_config["task_params"]
-
-for trial in range(30):
+tmp = task_data["coherences"][-1] * np.logspace(-(5 - 1), 0, 5, base=2)
+coherences = np.concatenate([-np.array(tmp[::-1]), np.array([0]), np.array(tmp)]).tolist()
+task_data["coherences"] = deepcopy(coherences)
+for trial in range(3):
     # defining RNN:
     activation_name = rnn_config["activation"]
     RNN_N = rnn_config["N"]
@@ -71,8 +81,8 @@ for trial in range(30):
     # LC
     n = LCI_config_file["n"]
     LC_N = LCI_config_file["N"]
-    W_inp = np.array(LCI_config_file["W_inp"])
-    W_out = np.array(LCI_config_file["W_out"])
+    w_inp = np.array(LCI_config_file["W_inp"])
+    w_out = np.array(LCI_config_file["W_out"])
 
     # Fitter:
     lambda_w = LCI_config_file["lambda_w"]
@@ -83,6 +93,7 @@ for trial in range(30):
     inp_connectivity_mask = np.array(LCI_config_file["inp_connectivity_mask"])
     rec_connectivity_mask = np.array(LCI_config_file["rec_connectivity_mask"])
     out_connectivity_mask = np.array(LCI_config_file["out_connectivity_mask"])
+    Qinitialization = LCI_config_file["Qinitialization"]
 
     if activation_name == 'relu':
         activation_LC = lambda x: torch.maximum(x, torch.tensor(0))
@@ -103,11 +114,12 @@ for trial in range(30):
                   "b_rec": np.array(rnn_data["bias_rec"]),
                   "y_init": np.zeros(RNN_N)}
     rnn_torch.set_params(RNN_params)
+    task = TaskCDDM(n_steps=n_steps, n_inputs=input_size, n_outputs=output_size, task_params=task_data)
 
     lc = LatentCircuit(n=n,
                        N=LC_N,
-                       W_inp=torch.Tensor(W_inp).to(device),
-                       W_out=torch.Tensor(W_out).to(device),
+                       W_inp=torch.Tensor(w_inp).to(device),
+                       W_out=torch.Tensor(w_out).to(device),
                        inp_connectivity_mask=torch.Tensor(inp_connectivity_mask).to(device),
                        rec_connectivity_mask=torch.Tensor(rec_connectivity_mask).to(device),
                        out_connectivity_mask=torch.Tensor(out_connectivity_mask).to(device),
@@ -116,22 +128,25 @@ for trial in range(30):
                        sigma_inp=sigma_inp,
                        device=device,
                        random_generator=rng)
-
-    task = TaskCDDM(n_steps=n_steps, n_inputs=input_size, n_outputs=output_size, task_params=task_data)
     criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(lc.parameters(), lr=lr)
+
+    # optimizer = torch.optim.Adam(lc.parameters(), lr=lr)
+    optimizer = RiemannianAdam(lc.parameters(), lr=lr)
+
     fitter = LatentCircuitFitter(LatentCircuit=lc, RNN=rnn_torch, Task=task,
                                  max_iter=max_iter, tol=tol,
                                  optimizer=optimizer, criterion=criterion,
-                                 lambda_w=lambda_w)
+                                 lambda_w=lambda_w,
+                                 Qinitialization=Qinitialization)
 
-    lc_inferredx, train_losses, val_losses, net_params = fitter.run_training()
+    lc_inferred, train_losses, val_losses, net_params = fitter.run_training()
     # net_params = pickle.load(open("/Users/tolmach/Documents/GitHub/latent_circuit_inference/data/inferred_LCs/0.0073745_20230222-064341/0.9082026200317382_LC_12-nodes/0.9082026200317382_LC_params.pkl", 'rb+'))
+    # net_params = pickle.load(open("/Users/tolmach/Documents/GitHub/latent_circuit_inference/data/inferred_LCs/0.0070184_20230222-083339/0.8626519397455755_LC_8-nodes/0.8626519397455755_LC_params.pkl", 'rb+'))
     # defining circuit
     n = LCI_config_file["n"]
     U = net_params["U"]
     q = net_params["q"]
-    Q = q @ U
+    Q = q.T @ U
     W_rec = RNN_params["W_rec"]
     w_rec_bar = Q @ W_rec @ Q.T
     w_rec = net_params["W_rec"]
@@ -141,6 +156,7 @@ for trial in range(30):
     w_out = net_params["W_out"]
     dt = net_params["dt"]
     tau = net_params["tau"]
+
     activation_fun_circuit = lambda x: np.maximum(0, x)
     circuit = RNN_numpy(N=n, W_rec=w_rec, W_inp=w_inp, W_out=w_out, dt=dt, tau=tau, activation=activation_fun_circuit)
     circuit.y = np.zeros(n)
@@ -158,10 +174,10 @@ for trial in range(30):
     RNN.y = np.zeros(n)
 
     # defining analyzer
-    if tag == '8-nodes':
+    if tag == '8nodes':
         node_labels = ['ctx m', "ctx c", "mR", "mL", "cR", "cL", "OutR", "OutL"]
-    elif tag == '12-nodes':
-        node_labels = ['ctx m', "ctx c", "mR", "mL", "cR", "cL", "mRx", "mLx", "cLx", "cRx", "OutR", "OutL"]
+    elif tag == '12nodes':
+        node_labels = ['ctx m', "ctx c", "mR", "mL", "cR", "cL", "mRx", "mLx", "cRx", "cLx", "OutR", "OutL"]
     analyzer = LCAnalyzer(circuit, labels=node_labels)
     input_batch_valid, target_batch_valid, conditions_valid = task.get_batch()
     mask = np.array(rnn_config["mask"])
@@ -194,8 +210,15 @@ for trial in range(30):
     data_folder = os.path.join(LCI_config_file["data_folder"], RNN_folder, f"{r2_tot}_LC_{tag}")
     datasaver = DataSaver(data_folder)
     datasaver.save_data(scores, f"{r2_tot}_LC_scores.json")
-    datasaver.save_data(LCI_config_file, f"{r2_tot}_LC_config.json")
-    datasaver.save_data(net_params, f"{r2_tot}_LC_params.pkl")
+    datasaver.save_data(jsonify(LCI_config_file), f"{r2_tot}_LC_config.json")
+    datasaver.save_data(jsonify(net_params), f"{r2_tot}_LC_params.json")
+    # saving RNN data alongside
+    try:
+        datasaver.save_data(jsonify(rnn_config), f"{mse_score_RNN}_config.json")
+        datasaver.save_data(jsonify(rnn_data), f"{mse_score_RNN}_params_CDDM.json")
+    except:
+        datasaver.save_data(rnn_config, f"{mse_score_RNN}_config.pkl")
+        datasaver.save_data(rnn_data, f"{mse_score_RNN}_params_CDDM.pkl")
 
     w_rec = net_params["W_rec"]
     fig_w_rec = analyzer.plot_recurrent_matrix()
@@ -236,7 +259,7 @@ for trial in range(30):
     dsa.get_fixed_points(Input=np.array([1, 0, 0.5, 0.5, 0.5, 0.5]), **params)
     dsa.get_fixed_points(Input=np.array([0, 1, 0.5, 0.5, 0.5, 0.5]), **params)
     print(f"Calculating Line Attractor analytics")
-    dsa.calc_LineAttractor_analytics()
+    dsa.calc_LineAttractor_analytics(N_points=101)
     fig_LA3D = dsa.plot_LineAttractor_3D()
     datasaver.save_figure(fig_LA3D, f"{r2_tot}_LC_LA3D.png")
     datasaver.save_data(dsa.fp_data, f"{r2_tot}_fp_data.pkl")
