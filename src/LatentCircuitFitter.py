@@ -6,7 +6,9 @@ import numpy as np
 import torch
 from copy import deepcopy
 from scipy.sparse.linalg import lsqr
+import geoopt
 from geoopt import Stiefel
+from sklearn.decomposition import IncrementalPCA as iPCA
 
 
 def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_loss):
@@ -27,7 +29,7 @@ def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_los
 
 
 class LatentCircuitFitter():
-    def __init__(self, LatentCircuit, RNN, Task, max_iter, tol, criterion, optimizer, lambda_w, Qinitialization):
+    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, criterion, optimizer, lambda_w, encoding, Qinitialization):
         '''
         :param RNN: LatentCircuit (specific template class)
         :param RNN: pytorch RNN (specific template class)
@@ -43,35 +45,94 @@ class LatentCircuitFitter():
         self.RNN = RNN
         self.LatentCircuit = LatentCircuit
         self.Task = Task
+        self.N_PCs = N_PCs
         self.max_iter = max_iter
         self.tol = tol
         self.criterion = criterion
         self.optimizer = optimizer
         self.lambda_w = lambda_w
+        self.encoding = encoding
         self.Qinitialization = Qinitialization
         self.device = self.LatentCircuit.device
-        if (self.LatentCircuit.N < self.RNN.N):
-            self.do_pca = True
-        elif (self.LatentCircuit.N == self.RNN.N):
-            self.do_pca = False
-        else:
+
+        input_batch, target_batch, _ = self.Task.get_batch()
+        input_batch = torch.from_numpy(input_batch.astype("float32")).to(self.LatentCircuit.device)
+        target_batch = torch.from_numpy(target_batch.astype("float32")).to(self.LatentCircuit.device)
+        # default shape of q-matrix, if there is no projection on lower dimensional space
+        self.q_shape = (self.RNN.N, self.LatentCircuit.N)
+
+        with torch.no_grad():
+            self.RNN.sigma_rec = torch.tensor(0, device=self.device)
+            self.RNN.sigma_inp = torch.tensor(0, device=self.device)
+            y, predicted_output_rnn = self.RNN(input_batch)
+
+        if (self.LatentCircuit.N > self.RNN.N):
             raise ValueError("Input dimensionality of the latent circuit has to be lower than dimensionality of RNN!")
+        if (self.N_PCs > self.RNN.N) or (self.N_PCs < self.LatentCircuit.N):
+            raise ValueError("N_PC parameter has to be greater than the number of latent nodes but <= number of nodes in the RNN!")
 
-    def train_step(self, input, Uy, predicted_output_rnn):
+        self.set_projection()
+        self.q_shape = (self.N_PCs, self.LatentCircuit.N) # - update the shape of q
+        y = self.projection(y)
+
+        if self.Qinitialization:
+            self.initialize_Q(y, input_batch, target_batch)
+        else:
+            manifold = geoopt.Stiefel()
+            self.q = geoopt.ManifoldParameter(manifold.random(self.q_shape)).to(self.device)
+    # def make_orthonormal(self, q=None):
+    #     if q is None:
+    #         on_self = True
+    #         q = self.q
+    #     else:
+    #         on_self = False
+    #     U, s, Vh = torch.linalg.svd(q)
+    #     S = torch.zeros((U.shape[-1], Vh.shape[0]), device=self.device)
+    #     k = int(torch.minimum(torch.tensor(U.shape[-1]), torch.tensor(Vh.shape[0])))
+    #     S[:k, :k] = torch.eye(k, device=self.device)
+    #     if on_self is True:
+    #         self.q.data = (U @ S @ Vh).to(self.device)
+    #     else:
+    #         return U @ S @ Vh
+
+    def set_projection(self):
+        print("setting projection of RNN traces on the lower subspace")
+        # do the PCA on RNN traces to lower the dimensionality!
+
+        input_batch, target_batch, conditions_batch = self.Task.get_batch()
+        sigma_rec = deepcopy(self.RNN.sigma_rec)
+        sigma_inp = deepcopy(self.RNN.sigma_inp)
+        self.RNN.sigma_rec = self.RNN.sigma_inp = torch.tensor(0, device=self.device)
+        y, predicted_output_rnn = self.RNN(torch.from_numpy(input_batch.astype("float32")).to(self.RNN.device))
+
+        Y = y.reshape(self.RNN.N, -1).detach().cpu().numpy().T
+        pca = iPCA(n_components=self.N_PCs, batch_size=1000)
+        pca.partial_fit(Y)
+
+        self.Pr = torch.Tensor(pca.components_).to(self.RNN.device)
+        self.RNN.sigma_rec = torch.tensor(sigma_rec, device=self.device)
+        self.RNN.sigma_inp = torch.tensor(sigma_inp, device=self.device)
+        def projection_function(y):
+            return torch.einsum("ij, jkl->ikl", self.Pr, y)
+
+        self.projection = projection_function
+        return None
+
+    def train_step(self, input, y, predicted_output_RNN):
         self.LatentCircuit.train()
-        Qx, predicted_output_lc = self.LatentCircuit(input)
+        x, predicted_output_lc = self.LatentCircuit(input)
 
-        # mean_out = predicted_output_rnn.reshape(-1, predicted_output_rnn.shape[-1])
-        # var_out = torch.mean(torch.mean((mean_out - torch.mean(mean_out, dim=0)) ** 2, dim=0))
-        # mean_traces = Uy.reshape(-1, Uy.shape[-1])
-        # var_traces = torch.mean(torch.mean((mean_traces - torch.mean(mean_traces, dim=0)) ** 2, dim=0))
-        # # / var_out + \ #/ var_traces + \
-
-        loss = self.criterion(predicted_output_lc, predicted_output_rnn) / torch.var(predicted_output_rnn, unbiased=False) + \
-               self.criterion(Qx, Uy) / torch.var(Uy, unbiased=False) + \
+        loss = self.criterion(predicted_output_lc, predicted_output_RNN) / torch.var(predicted_output_RNN, unbiased=False) + \
                self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, 2)) + \
                self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.input_layer.weight, 2)) + \
                self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2))
+
+        if self.encoding:
+            y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
+            loss += self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
+        else:
+            x_emb = torch.einsum("ij, ikp->jkp", self.q.T, x)
+            loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -80,29 +141,35 @@ class LatentCircuitFitter():
         # projection back to constrained space
         device = self.LatentCircuit.device
         self.LatentCircuit.input_layer.weight.data *= self.LatentCircuit.inp_connectivity_mask.to(device)
+        # keeping the W_inp positive
+        self.LatentCircuit.input_layer.weight.data *= (torch.sign(self.LatentCircuit.input_layer.weight.data) + 1) / 2
         self.LatentCircuit.recurrent_layer.weight.data *= self.LatentCircuit.rec_connectivity_mask.to(device)
         self.LatentCircuit.output_layer.weight.data *= self.LatentCircuit.out_connectivity_mask.to(device)
-        # self.LatentCircuit.make_orthonormal()
         return loss.item()
 
-    def eval_step(self, input, Uy, predicted_output_rnn):
+    def eval_step(self, input, y, predicted_output_rnn):
         with torch.no_grad():
             self.LatentCircuit.eval()
-            Qx, predicted_output_lc = self.LatentCircuit(input, w_noise=False)
+            x, predicted_output_lc = self.LatentCircuit(input, w_noise=False)
             val_loss = self.criterion(predicted_output_lc, predicted_output_rnn) + \
-                       self.criterion(Qx, Uy) + \
                        self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, 2))
+            if self.encoding:
+                y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
+                val_loss += self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
+            else:
+                x_emb = torch.einsum("ij, ikp->jkp", self.q.T, x)
+                val_loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
             return float(val_loss.cpu().numpy())
 
     def run_training(self):
         train_losses = []
         val_losses = []
-        # runs all trajectories without noise in dynamics and input
-        if self.do_pca: self.LatentCircuit.set_projection(self.RNN, self.Task)
+
         min_train_loss = np.inf
         min_val_loss = np.inf
         best_lc_params = deepcopy(self.LatentCircuit.get_params())
 
+        # the same batch is used over and over again!
         input_batch, target_batch, _ = self.Task.get_batch()
         input_batch = torch.from_numpy(input_batch.astype("float32")).to(self.LatentCircuit.device)
         target_batch = torch.from_numpy(target_batch.astype("float32")).to(self.LatentCircuit.device)
@@ -111,8 +178,6 @@ class LatentCircuitFitter():
             self.RNN.sigma_rec = torch.tensor(0, device=self.device)
             self.RNN.sigma_inp = torch.tensor(0, device=self.device)
             y, predicted_output_rnn = self.RNN(input_batch)
-        if self.do_pca: y = torch.swapaxes(self.LatentCircuit.projection(torch.swapaxes(y, 0, -1)), 0, -1)
-        if self.Qinitialization: self.initialize_Q(y, input_batch, target_batch)
 
         for iter in range(self.max_iter):
             train_loss = self.train_step(input_batch, y.detach(), predicted_output_rnn.detach())
@@ -124,7 +189,7 @@ class LatentCircuitFitter():
             val_losses.append(val_loss)
             if val_loss <= min_val_loss:
                 min_val_loss = val_loss
-                best_lc_params = deepcopy(self.LatentCircuit.get_params())
+                best_lc_params = deepcopy(self.get_params())
             if train_loss <= min_train_loss: min_train_loss = train_loss
 
             if val_loss <= self.tol:
@@ -142,12 +207,22 @@ class LatentCircuitFitter():
         # columns of inputs and outputs
         b = np.hstack([input_batch.reshape(input_batch.shape[0], -1).T.detach().cpu().numpy(),
                        target_batch.reshape(target_batch.shape[0], -1).detach().cpu().numpy().T])
-        C = np.zeros((self.LatentCircuit.N, b.shape[1]))
+        C = np.zeros((self.N_PCs, b.shape[1]))
         for i in range(C.shape[1]):
             C[:, i] = lsqr(A, b[:, i], damp=100)[0]
-        q = deepcopy(C)
-        q = self.LatentCircuit.make_orthonormal(torch.Tensor(q).to(self.LatentCircuit.device))
+        q = torch.Tensor(deepcopy(C)).to(self.device)
+        U, s, Vh = torch.linalg.svd(q)
+        S = torch.zeros((U.shape[-1], Vh.shape[0]), device=self.device)
+        k = int(torch.minimum(torch.tensor(U.shape[-1]), torch.tensor(Vh.shape[0])))
+        S[:k, :k] = torch.eye(k, device=self.device)
+        q = (U @ S @ Vh).to(self.device)
         manifold = geoopt.Stiefel()
-        self.LatentCircuit.q = geoopt.ManifoldParameter(q, manifold=manifold).to(self.LatentCircuit.device)
+        self.q = geoopt.ManifoldParameter(q, manifold=manifold).to(self.LatentCircuit.device)
         return None
 
+
+    def get_params(self):
+        params = self.LatentCircuit.get_params()
+        params["U"] = deepcopy(self.Pr.detach().numpy())
+        params["q"] = deepcopy(self.q.detach().numpy())
+        return params

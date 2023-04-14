@@ -13,7 +13,7 @@
 module purge
 module load cudatoolkit/12.0
 module load cudnn/cuda-11.x/8.2.0
-module load anaconda3/2022.5
+module load anaconda3/2022.10
 
 # Activate conda environment
 conda activate RNN_training_pipeline

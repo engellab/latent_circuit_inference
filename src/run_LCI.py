@@ -30,8 +30,7 @@ def R2(x, y):
 
 print(f"system arguments: {sys.argv}")
 #given the folder, open up the files:
-# RNN_folder = sys.argv[1]
-RNN_folder = "CDDM_relu;N=100;lmbdr=0.0;lmbdo=0.3_0.0069041_20230401-135134"
+RNN_folder = sys.argv[1]
 tag = '8nodes'
 
 disp = False
@@ -44,7 +43,7 @@ task_data = rnn_config["task_params"]
 tmp = task_data["coherences"][-1] * np.logspace(-(5 - 1), 0, 5, base=2)
 coherences = np.concatenate([-np.array(tmp[::-1]), np.array([0]), np.array(tmp)]).tolist()
 task_data["coherences"] = deepcopy(coherences)
-for trial in range(3):
+for trial in range(5):
     # defining RNN:
     activation_name = rnn_config["activation"]
     RNN_N = rnn_config["N"]
@@ -94,6 +93,7 @@ for trial in range(3):
     rec_connectivity_mask = np.array(LCI_config_file["rec_connectivity_mask"])
     out_connectivity_mask = np.array(LCI_config_file["out_connectivity_mask"])
     Qinitialization = LCI_config_file["Qinitialization"]
+    encoding = LCI_config_file["encoding"]
 
     if activation_name == 'relu':
         activation_LC = lambda x: torch.maximum(x, torch.tensor(0))
@@ -137,6 +137,7 @@ for trial in range(3):
                                  max_iter=max_iter, tol=tol,
                                  optimizer=optimizer, criterion=criterion,
                                  lambda_w=lambda_w,
+                                 encoding = encoding,
                                  Qinitialization=Qinitialization)
 
     lc_inferred, train_losses, val_losses, net_params = fitter.run_training()
