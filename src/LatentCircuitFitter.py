@@ -5,6 +5,8 @@ import geoopt
 import numpy as np
 import torch
 from copy import deepcopy
+
+from geoopt.optim import RiemannianAdam
 from scipy.sparse.linalg import lsqr
 import geoopt
 from geoopt import Stiefel
@@ -29,7 +31,7 @@ def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_los
 
 
 class LatentCircuitFitter():
-    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, criterion, optimizer, lambda_w, encoding, Qinitialization):
+    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, lr, criterion, lambda_w, encoding, Qinitialization):
         '''
         :param RNN: LatentCircuit (specific template class)
         :param RNN: pytorch RNN (specific template class)
@@ -37,7 +39,6 @@ class LatentCircuitFitter():
         :param max_iter: maximum number of iterations
         :param tol: float, such that if the cost function reaches tol the optimization terminates
         :param criterion: function to evaluate loss
-        :param optimizer: pytorch optimizer (Adam, SGD, etc.)
         :param lambda_ort: float, regularization softly imposing a pair-wise orthogonality
          on columns of W_inp and rows of W_out
         :param lambda_w: float, regularization on the circuit weights
@@ -48,8 +49,8 @@ class LatentCircuitFitter():
         self.N_PCs = N_PCs
         self.max_iter = max_iter
         self.tol = tol
+        self.lr = lr
         self.criterion = criterion
-        self.optimizer = optimizer
         self.lambda_w = lambda_w
         self.encoding = encoding
         self.Qinitialization = Qinitialization
@@ -80,6 +81,8 @@ class LatentCircuitFitter():
         else:
             manifold = geoopt.Stiefel()
             self.q = geoopt.ManifoldParameter(manifold.random(self.q_shape)).to(self.device)
+        params = list(self.LatentCircuit.parameters()) + [self.q]
+        self.optimizer = RiemannianAdam(params, lr=self.lr)
     # def make_orthonormal(self, q=None):
     #     if q is None:
     #         on_self = True

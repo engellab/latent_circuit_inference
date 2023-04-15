@@ -60,7 +60,7 @@ def R2(x, y):
 #              "0.0072453_CDDM;relu;N=85;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
 #              "0.0066462_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000"]
 arguments = ['0.0073745_CDDM;relu;N=100;lmbdo=0.3;lmbdr=0.1;lr=0.002;maxiter=3000']
-tag = "8nodes;decoding"
+tag = "8nodes;encoding"
 for RNN_folder in arguments:
     disp = False
     RNN_folder_full_path = os.path.join("/Users/tolmach/Documents/GitHub/rnn_coach/data/trained_RNNs/CDDM", f"{RNN_folder}")
@@ -153,15 +153,11 @@ for RNN_folder in arguments:
                            device=device,
                            random_generator=rng)
         criterion = torch.nn.MSELoss()
-
-        # optimizer = torch.optim.Adam(lc.parameters(), lr=lr)
-        optimizer = RiemannianAdam(lc.parameters(), lr=lr)
-
         fitter = LatentCircuitFitter(LatentCircuit=lc, RNN=rnn_torch, Task=task,
                                      N_PCs = N_PCs,
                                      encoding = encoding,
-                                     max_iter=max_iter, tol=tol,
-                                     optimizer=optimizer, criterion=criterion,
+                                     max_iter=max_iter, tol=tol, lr = lr,
+                                     criterion=criterion,
                                      lambda_w=lambda_w,
                                      Qinitialization=Qinitialization)
 
