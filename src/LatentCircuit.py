@@ -87,8 +87,7 @@ class LatentCircuit(torch.nn.Module):
                             self.activation(
                                 self.recurrent_layer(states[:, i, :]) +
                                 self.input_layer(u[:, i, :] + inp_noise[:, i, :])) +
-                            rec_noise[:, i, :]# -
-                            # 0.1 * states[:, i, :] ** 3
+                            rec_noise[:, i, :]
                         )
             states = torch.cat((states, state_new.unsqueeze_(1)), 1)
         outputs = torch.swapaxes(self.output_layer(states), 0, -1)

@@ -22,6 +22,19 @@ from latent_circuit_inference.src.utils import *
 from latent_circuit_inference.src.circuit_vizualization import *
 from matplotlib import pyplot as plt
 
+from pathlib import Path
+home = str(Path.home())
+if home == '/home/pt1290':
+    projects_folder = home
+    data_save_path = home + '/latent_circuit_inference/data/inferred_LCs'
+    LC_configs_path = home + '/latent_circuit_inference/data/configs'
+elif home == '/Users/tolmach':
+    projects_folder = home + '/Documents/GitHub/'
+    data_save_path = projects_folder + '/latent_circuit_inference/data/inferred_LCs'
+    LC_configs_path = projects_folder + '/latent_circuit_inference/data/configs'
+else:
+    pass
+
 def mse_scoring(x, y):
     return np.mean((x - y) ** 2)
 
@@ -30,18 +43,18 @@ def R2(x, y):
 
 print(f"system arguments: {sys.argv}")
 RNN_folder = sys.argv[1]
-# RNN_folder = "0.0064935_CDDM;relu;N=94;lmbdo=0.3;lmbdr=0.05;lr=0.002;maxiter=3000"
+# RNN_folder = "0.008121_CDDM;relu;N=96;lmbdo=0.3;lmbdr=0.3;lr=0.002;maxiter=3000"
 
 tag = '8nodes;encoding'
 taskname = RNN_folder.split("_")[1].split(";")[0]
 disp = False
 
-RNN_folder_full_path = os.path.join(f"../../rnn_coach/data/trained_RNNs/{taskname}", f"{RNN_folder}")
+RNN_folder_full_path = os.path.join(f"{projects_folder}/rnn_coach/data/trained_RNNs/{taskname}", f"{RNN_folder}")
 mse_score_RNN = RNN_folder.split("_")[0]
 
 rnn_config = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_config.json"), "rb+"))
 rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_{taskname}.json"), "rb+"))
-LCI_config_file = json.load(open(os.path.join("../", "data", "configs", f"LCI_config_{tag}.json"), mode="r", encoding="utf-8"))
+LCI_config_file = json.load(open(os.path.join(LC_configs_path, f"LCI_config_{tag}.json"), mode="r", encoding="utf-8"))
 task_data = rnn_config["task_params"]
 tmp = task_data["coherences"][-1] * np.logspace(-(5 - 1), 0, 5, base=2)
 coherences = np.concatenate([-np.array(tmp[::-1]), np.array([0]), np.array(tmp)]).tolist()
@@ -209,9 +222,9 @@ for trial in range(50):
     print(f"Projected R2: {r2_proj}")
     scores = {"mse_score": mse_score, "r2_tot":r2_tot, "r2_proj" : r2_proj}
 
-    if r2_proj > 0.82:
-        data_folder = os.path.join(LCI_config_file["data_folder"], RNN_folder, f"{r2_tot}_{r2_proj}_LC_{tag}")
-        datasaver = DataSaver(data_folder)
+    if r2_tot > 0.82:
+        data_save_folder = os.path.join(data_save_path, RNN_folder, f"{r2_tot}_{r2_proj}_LC_{tag}")
+        datasaver = DataSaver(data_save_folder)
         datasaver.save_data(scores, f"{r2_tot}_{r2_proj}_LC_scores.json")
         datasaver.save_data(jsonify(LCI_config_file), f"{r2_tot}_{r2_proj}_LC_config.json")
         datasaver.save_data(jsonify(net_params), f"{r2_tot}_{r2_proj}_LC_params.json")
@@ -266,7 +279,7 @@ for trial in range(50):
         datasaver.save_data(dsa.LA_data, f"{r2_tot}_{r2_proj}_LA_data.pkl")
         if disp: plt.show()
 
-        LA_data_lc = pickle.load(open(os.path.join(data_folder, f"{r2_tot}_{r2_proj}_LA_data.pkl"), "rb+"))
+        LA_data_lc = pickle.load(open(os.path.join(data_save_folder, f"{r2_tot}_{r2_proj}_LA_data.pkl"), "rb+"))
         LA_data_RNN = pickle.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_LA_data.pkl"), "rb+"))
         fig_selection_vects = analyzer.plot_selection_vectors(Q.T, LA_data_lc, LA_data_RNN)
         datasaver.save_figure(fig_selection_vects, f"{r2_tot}_{r2_proj}_selection_vects_comparison.png")

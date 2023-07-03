@@ -2,10 +2,17 @@ import json
 import os
 import numpy as np
 import sys
-sys.path.insert(0, '../')
-sys.path.insert(0, '../../')
-from latent_circuit_inference.src.utils import get_project_root
 from datetime import date
+from pathlib import Path
+home = str(Path.home())
+if home == '/home/pt1290':
+    projects_folder = home
+elif home == '/Users/tolmach':
+    projects_folder = home + '/Documents/GitHub/'
+else:
+    pass
+
+LC_configs_path = home + '/latent_circuit_inference/data/configs'
 date = ''.join((list(str(date.today()).split("-"))[::-1]))
 
 max_iter = 600
@@ -20,7 +27,6 @@ sigma_inp = 0.03
 Qinitialization = False
 encoding = True
 tag = f'{N}nodes;{"encoding" if encoding else "decoding"}'
-data_folder = os.path.abspath(os.path.join(get_project_root(), "data", "inferred_LCs"))
 config_dict = {}
 config_dict["N"] = N
 config_dict["N_PCs"] = 12
@@ -46,10 +52,9 @@ config_dict["max_iter"] = max_iter
 config_dict["tol"] = tol
 config_dict["lr"] = lr
 config_dict["lambda_w"] = lambda_w
-config_dict["data_folder"] = data_folder
 config_dict["Qinitialization"] = Qinitialization
 config_dict["encoding"] = encoding
 config_dict["tag"] = tag
 json_obj = json.dumps(config_dict, indent=4)
-outfile = open(os.path.join(get_project_root(), "data", "configs", f"LCI_config_{tag}.json"), mode="w")
+outfile = open(os.path.join(LC_configs_path, f"LCI_config_{tag}.json"), mode="w")
 outfile.write(json_obj)
