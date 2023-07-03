@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
 #SBATCH --mem-per-gpu=42G
-#SBATCH --time=0:15:00
+#SBATCH --time=2:30:00
 #SBATCH --mail-user=pt1290@princeton.edu
 #SBATCH --output=../log/%x.%A_%a.out
 #SBATCH --error=../log/%x.%A_%a.err
@@ -17,5 +17,5 @@ module load anaconda3/2022.10
 
 # Activate conda environment
 conda activate RNN_training_pipeline
-python ~/latent_circuit_inference/src/set_LCI_config_8nodes.py
+python ~/latent_circuit_inference/src/set_LCI_config.py
 python ~/latent_circuit_inference/src/run_LCI.py $1

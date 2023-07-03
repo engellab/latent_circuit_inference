@@ -87,7 +87,8 @@ class LatentCircuit(torch.nn.Module):
                             self.activation(
                                 self.recurrent_layer(states[:, i, :]) +
                                 self.input_layer(u[:, i, :] + inp_noise[:, i, :])) +
-                                rec_noise[:, i, :]
+                            rec_noise[:, i, :]# -
+                            # 0.1 * states[:, i, :] ** 3
                         )
             states = torch.cat((states, state_new.unsqueeze_(1)), 1)
         outputs = torch.swapaxes(self.output_layer(states), 0, -1)
@@ -103,6 +104,11 @@ class LatentCircuit(torch.nn.Module):
         param_dict = {}
         W_out = deepcopy(self.output_layer.weight.data.cpu().detach().numpy())
         W_rec = deepcopy(self.recurrent_layer.weight.data.cpu().detach().numpy())
+        if self.recurrent_layer.bias is None:
+            pass
+        else:
+            b_rec = deepcopy(self.recurrent_layer.bias.data.cpu().detach().numpy())
+            param_dict["b_rec"] = b_rec
         W_inp = deepcopy(self.input_layer.weight.data.cpu().detach().numpy())
         param_dict["W_out"] = W_out
         param_dict["W_inp"] = W_inp

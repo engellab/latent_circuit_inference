@@ -28,12 +28,12 @@ def mse_scoring(x, y):
 def R2(x, y):
     return 1.0 - mse_scoring(x, y)/np.var(y)
 
-arguments = ['CDDMplus_relu;N=100;lmbdr=0.3;lmbdo=0.3_0.0079487_20230414-012759']
-tag = "8nodes"
+arguments = ['0.0071472_CDDMplus;relu;N=100;lmbdo=0.3;lmbdr=0.3;lr=0.002;maxiter=3000']
+tag = "8nodes;decoding"
 for RNN_folder in arguments:
     disp = False
     RNN_folder_full_path = os.path.join("/Users/tolmach/Documents/GitHub/rnn_coach/data/trained_RNNs/CDDMplus", f"{RNN_folder}")
-    mse_score_RNN = RNN_folder.split("_")[2]
+    mse_score_RNN = RNN_folder.split("_")[0]
 
     rnn_config = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_config.json"), "rb+"))
     rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_CDDMplus.json"), "rb+"))
@@ -45,17 +45,14 @@ for RNN_folder in arguments:
     for trial in range(11):
         print(RNN_folder, trial)
         # defining RNN:
-        activation_name = rnn_config["activation"]
+        activation_name_RNN = rnn_config["activation"]
         RNN_N = rnn_config["N"]
+        match activation_name_RNN:
+            case "relu": activation_RNN = lambda x: torch.maximum(x, torch.tensor(0))
+            case "tanh": activation_RNN = torch.tanh
+            case "sigmoid": activation_RNN = lambda x: 1/(1 + torch.exp(-x))
+            case "softplus": activation_RNN = lambda x: torch.log(1 + torch.exp(5 * x))
 
-        if activation_name == "relu":
-            activation_RNN = lambda x: torch.maximum(x, torch.tensor(0))
-        elif activation_name == "tanh":
-            activation_RNN = torch.tanh
-        elif activation_name == "sigmoid":
-            activation_RNN = lambda x: 1/(1 + torch.exp(-x))
-        elif activation_name == "softplus":
-            activation_RNN = lambda x: torch.log(1 + torch.exp(5 * x))
         dt = rnn_config["dt"]
         tau = rnn_config["tau"]
         connectivity_density_rec = rnn_config["connectivity_density_rec"]
@@ -72,14 +69,14 @@ for RNN_folder in arguments:
         if not seed is None:
             rng.manual_seed(seed)
         input_size = np.array(rnn_data["W_inp"]).shape[1]
-        output_size = 2
+        output_size = np.array(rnn_data["W_out"]).shape[0]
 
         # Task:
         n_steps = task_data["n_steps"]
 
         # LC
-        n = LCI_config_file["n"]
-        LC_N = LCI_config_file["N"]
+        N = LCI_config_file["N"]
+        N_PCs = LCI_config_file["N_PCs"]
         w_inp = np.array(LCI_config_file["W_inp"])
         w_out = np.array(LCI_config_file["W_out"])
 
@@ -88,20 +85,18 @@ for RNN_folder in arguments:
         max_iter = LCI_config_file["max_iter"]
         tol = LCI_config_file["tol"]
         lr = LCI_config_file["lr"]
-        actvation_name = LCI_config_file["activation"]
+        actvation_name_LC = LCI_config_file["activation"]
         inp_connectivity_mask = np.array(LCI_config_file["inp_connectivity_mask"])
         rec_connectivity_mask = np.array(LCI_config_file["rec_connectivity_mask"])
         out_connectivity_mask = np.array(LCI_config_file["out_connectivity_mask"])
         Qinitialization = LCI_config_file["Qinitialization"]
+        encoding = LCI_config_file["encoding"]
 
-        if activation_name == "relu":
-            activation_LC = lambda x: torch.maximum(x, torch.tensor(0))
-        elif activation_name == "tanh":
-            activation_LC = torch.tanh
-        elif activation_name == "sigmoid":
-            activation_LC = lambda x: 1/(1 + torch.exp(-x))
-        elif activation_name == "softplus":
-            activation_LC = lambda x: torch.log(1 + torch.exp(5 * x))
+        match actvation_name_LC:
+            case "relu": activation_LC = lambda x: torch.maximum(x, torch.tensor(0))
+            case "tanh": activation_LC = lambda x: torch.tanh
+            case "sigmoid": activation_LC = lambda x: 1/(1 + torch.exp(-x))
+            case "softplus": activation_LC = lambda x: torch.log(1 + torch.exp(5 * x))
 
         # # creating instances:
         rnn_torch = RNN_torch(N=RNN_N, dt=dt, tau=tau, input_size=input_size, output_size=output_size,
@@ -113,10 +108,9 @@ for RNN_folder in arguments:
                       "b_rec": np.array(rnn_data["bias_rec"]),
                       "y_init": np.zeros(RNN_N)}
         rnn_torch.set_params(RNN_params)
-        task = TaskCDDM(n_steps=n_steps, n_inputs=input_size, n_outputs=output_size, task_params=task_data)
+        task = TaskCDDM(n_steps=n_steps, n_inputs=input_size, n_outputs=2, task_params=task_data)
 
-        lc = LatentCircuit(n=n,
-                           N=LC_N,
+        lc = LatentCircuit(N=N,
                            W_inp=torch.Tensor(w_inp).to(device),
                            W_out=torch.Tensor(w_out).to(device),
                            inp_connectivity_mask=torch.Tensor(inp_connectivity_mask).to(device),
@@ -128,13 +122,11 @@ for RNN_folder in arguments:
                            device=device,
                            random_generator=rng)
         criterion = torch.nn.MSELoss()
-
-        # optimizer = torch.optim.Adam(lc.parameters(), lr=lr)
-        optimizer = RiemannianAdam(lc.parameters(), lr=lr)
-
         fitter = LatentCircuitFitter(LatentCircuit=lc, RNN=rnn_torch, Task=task,
-                                     max_iter=max_iter, tol=tol,
-                                     optimizer=optimizer, criterion=criterion,
+                                     N_PCs = N_PCs,
+                                     encoding = encoding,
+                                     max_iter=max_iter, tol=tol, lr = lr,
+                                     criterion=criterion,
                                      lambda_w=lambda_w,
                                      Qinitialization=Qinitialization)
 
@@ -142,12 +134,12 @@ for RNN_folder in arguments:
         # net_params = pickle.load(open("/Users/tolmach/Documents/GitHub/latent_circuit_inference/data/inferred_LCs/0.0073745_20230222-064341/0.9082026200317382_LC_12-nodes/0.9082026200317382_LC_params.pkl", "rb+"))
         # net_params = pickle.load(open("/Users/tolmach/Documents/GitHub/latent_circuit_inference/data/inferred_LCs/0.0070184_20230222-083339/0.8626519397455755_LC_8-nodes/0.8626519397455755_LC_params.pkl", "rb+"))
         # defining circuit
-        n = LCI_config_file["n"]
+        N_LC = LCI_config_file["N"]
         U = net_params["U"]
         q = net_params["q"]
-        Q = q.T @ U
+        Q = U.T @ q
         W_rec = RNN_params["W_rec"]
-        w_rec_bar = Q @ W_rec @ Q.T
+        w_rec_bar = Q.T @ W_rec @ Q
         w_rec = net_params["W_rec"]
         names = ["ctx m", "ctx c", "mr", "ml", "cr", "cl", "OutR", "OutL"]
         w_rec = net_params["W_rec"]
@@ -157,26 +149,34 @@ for RNN_folder in arguments:
         tau = net_params["tau"]
 
         activation_fun_circuit = lambda x: np.maximum(0, x)
-        circuit = RNN_numpy(N=n, W_rec=w_rec, W_inp=w_inp, W_out=w_out, dt=dt, tau=tau, activation=activation_fun_circuit)
-        circuit.y = np.zeros(n)
+        circuit = RNN_numpy(N=N_LC, W_rec=w_rec, W_inp=w_inp, W_out=w_out, dt=dt, tau=tau, activation=activation_fun_circuit)
+        circuit.y = np.zeros(N_LC)
 
         # defining RNN
-        N = rnn_data["N"]
-        x = np.random.randn(n)
+        N_RNN = rnn_data["N"]
+        x = np.random.randn(N_RNN)
         W_rec = RNN_params["W_rec"]
         W_inp = RNN_params["W_inp"]
         W_out = RNN_params["W_out"]
         dt = net_params["dt"]
         tau = net_params["tau"]
-        activation_fun_RNN = lambda x: np.maximum(0, x)
-        RNN = RNN_numpy(N=N, W_rec=W_rec, W_inp=W_inp, W_out=W_out, dt=dt, tau=tau, activation=activation_fun_RNN)
-        RNN.y = np.zeros(n)
+        match activation_name_RNN:
+            case "relu":
+                activation_fun_RNN_np = lambda x: np.maximum(x, 0)
+            case "tanh":
+                activation_fun_RNN_np = lambda x: np.tanh
+            case "sigmoid":
+                activation_fun_RNN_np = lambda x: 1 / (1 + np.exp(-x))
+            case "softplus":
+                activation_fun_RNN_np = lambda x: np.log(1 + np.exp(5 * x))
+        RNN = RNN_numpy(N=N_RNN, W_rec=W_rec, W_inp=W_inp, W_out=W_out, dt=dt, tau=tau, activation=activation_fun_RNN_np)
+        RNN.y = np.zeros(N_RNN)
 
         # defining analyzer
-        if tag == "8nodes":
+        if "8nodes" in tag:
             node_labels = ["ctx m", "ctx c", "mR", "mL", "cR", "cL", "OutR", "OutL"]
-        elif tag == "12nodes":
-            node_labels = ["ctx m", "ctx c", "mR", "mL", "cR", "cL", "mRx", "mLx", "cRx", "cLx", "OutR", "OutL"]
+        # elif tag == "12nodes":
+        #     node_labels = ["ctx m", "ctx c", "mR", "mL", "cR", "cL", "mRx", "mLx", "cRx", "cLx", "OutR", "OutL"]
         analyzer = LCAnalyzer(circuit, labels=node_labels)
         input_batch_valid, target_batch_valid, conditions_valid = task.get_batch()
         mask = np.array(rnn_config["mask"])
@@ -198,8 +198,9 @@ for RNN_folder in arguments:
         circuit.clear_history()
         RNN_trajectories, RNN_output = RNN.run_multiple_trajectories(input_timeseries=input_batch_valid, sigma_rec=0, sigma_inp=0)
         lc_trajectories, lc_output = circuit.run_multiple_trajectories(input_timeseries=input_batch_valid, sigma_rec=0, sigma_inp=0)
-        lc_trajectories_emb = np.swapaxes(Q.T @ np.swapaxes(lc_trajectories, 0, 1), 0, 1)
-        RNN_trajectories_proj = np.swapaxes(Q @ np.swapaxes(RNN_trajectories, 0, 1), 0, 1)
+        #TODO: change to einsum
+        lc_trajectories_emb = np.swapaxes(Q @ np.swapaxes(lc_trajectories, 0, 1), 0, 1)
+        RNN_trajectories_proj = np.swapaxes(Q.T @ np.swapaxes(RNN_trajectories, 0, 1), 0, 1)
         r2_tot = np.mean([R2(lc_trajectories_emb[:, mask, i], RNN_trajectories[:, mask, i]) for i in range(batch_size)])
         r2_proj = np.mean([R2(lc_trajectories[:, mask, i], RNN_trajectories_proj[:, mask, i]) for i in range(batch_size)])
         print(f"Total R2: {r2_tot}")
@@ -214,10 +215,10 @@ for RNN_folder in arguments:
         # saving RNN data alongside
         try:
             datasaver.save_data(jsonify(rnn_config), f"{mse_score_RNN}_config.json")
-            datasaver.save_data(jsonify(rnn_data), f"{mse_score_RNN}_params_CDDM.json")
+            datasaver.save_data(jsonify(rnn_data), f"{mse_score_RNN}_params_CDDMplus.json")
         except:
             datasaver.save_data(rnn_config, f"{mse_score_RNN}_config.pkl")
-            datasaver.save_data(rnn_data, f"{mse_score_RNN}_params_CDDM.pkl")
+            datasaver.save_data(rnn_data, f"{mse_score_RNN}_params_CDDMplus.pkl")
 
         w_rec = net_params["W_rec"]
         fig_w_rec = analyzer.plot_recurrent_matrix()
@@ -267,6 +268,6 @@ for RNN_folder in arguments:
 
         LA_data_lc = pickle.load(open(os.path.join(data_folder, f"{r2_tot}_LA_data.pkl"), "rb+"))
         LA_data_RNN = pickle.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_LA_data.pkl"), "rb+"))
-        fig_selection_vects = analyzer.plot_selection_vectors(Q, LA_data_lc, LA_data_RNN)
+        fig_selection_vects = analyzer.plot_selection_vectors(Q.T, LA_data_lc, LA_data_RNN)
         datasaver.save_figure(fig_selection_vects, f"{r2_tot}_selection_vects_comparison.png")
         if disp: plt.show()

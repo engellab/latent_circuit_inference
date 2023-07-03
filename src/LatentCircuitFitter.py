@@ -60,7 +60,6 @@ class LatentCircuitFitter():
         input_batch = torch.from_numpy(input_batch.astype("float32")).to(self.LatentCircuit.device)
         target_batch = torch.from_numpy(target_batch.astype("float32")).to(self.LatentCircuit.device)
         # default shape of q-matrix, if there is no projection on lower dimensional space
-        self.q_shape = (self.RNN.N, self.LatentCircuit.N)
 
         with torch.no_grad():
             self.RNN.sigma_rec = torch.tensor(0, device=self.device)
@@ -79,8 +78,13 @@ class LatentCircuitFitter():
         if self.Qinitialization:
             self.initialize_Q(y, input_batch, target_batch)
         else:
+            q = torch.Tensor(np.random.randn(*self.q_shape)).to(self.LatentCircuit.device)
+            U, s, Vh = torch.linalg.svd(q)
+            k = int(torch.minimum(torch.tensor(U.shape[-1]), torch.tensor(Vh.shape[0])))
+            q = (U[:, :k] @ Vh).to(self.LatentCircuit.device)
             manifold = geoopt.Stiefel()
-            self.q = geoopt.ManifoldParameter(manifold.random(self.q_shape)).to(self.device)
+            self.q = geoopt.ManifoldParameter(q, manifold=manifold).to(self.LatentCircuit.device)
+
         params = list(self.LatentCircuit.parameters()) + [self.q]
         self.optimizer = RiemannianAdam(params, lr=self.lr)
     # def make_orthonormal(self, q=None):
@@ -128,14 +132,16 @@ class LatentCircuitFitter():
         loss = self.criterion(predicted_output_lc, predicted_output_RNN) / torch.var(predicted_output_RNN, unbiased=False) + \
                self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, 2)) + \
                self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.input_layer.weight, 2)) + \
-               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2))
+               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2)) #+ \
+               # self.lambda_w * torch.mean(torch.abs(self.Pr.T @ self.q))  # add extra sparsity penalty!
+               # self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.bias, 2)) + \
 
         if self.encoding:
+            x_emb = torch.einsum("ji, ikp->jkp", self.q, x)
+            loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
+        else:
             y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
             loss += self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
-        else:
-            x_emb = torch.einsum("ij, ikp->jkp", self.q.T, x)
-            loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -154,14 +160,14 @@ class LatentCircuitFitter():
         with torch.no_grad():
             self.LatentCircuit.eval()
             x, predicted_output_lc = self.LatentCircuit(input, w_noise=False)
-            val_loss = self.criterion(predicted_output_lc, predicted_output_rnn) + \
+            val_loss = self.criterion(predicted_output_lc, predicted_output_rnn) / torch.var(predicted_output_rnn, unbiased=False) + \
                        self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, 2))
             if self.encoding:
+                x_emb = torch.einsum("ji, ikp->jkp", self.q, x)
+                val_loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
+            else:
                 y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
                 val_loss += self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
-            else:
-                x_emb = torch.einsum("ij, ikp->jkp", self.q.T, x)
-                val_loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
             return float(val_loss.cpu().numpy())
 
     def run_training(self):
@@ -206,26 +212,27 @@ class LatentCircuitFitter():
         # get better initialization of Q by initializing it as
         # axes hosting the input and output variables
         # matrix of traces
+
+        # decoding perspective
         A = y.detach().cpu().numpy().reshape(y.shape[0], -1).T
         # columns of inputs and outputs
-        b = np.hstack([input_batch.reshape(input_batch.shape[0], -1).T.detach().cpu().numpy(),
-                       target_batch.reshape(target_batch.shape[0], -1).detach().cpu().numpy().T])
+        b = np.hstack([np.vstack([input_batch[:, :, i].detach().cpu().numpy(), target_batch[:, :, i].detach().cpu().numpy()]) for i in range(input_batch.shape[-1])]).T
         C = np.zeros((self.N_PCs, b.shape[1]))
+
         for i in range(C.shape[1]):
             C[:, i] = lsqr(A, b[:, i], damp=100)[0]
-        q = torch.Tensor(deepcopy(C)).to(self.device)
+        q = torch.Tensor(deepcopy(C)).to(self.LatentCircuit.device)
         U, s, Vh = torch.linalg.svd(q)
-        S = torch.zeros((U.shape[-1], Vh.shape[0]), device=self.device)
         k = int(torch.minimum(torch.tensor(U.shape[-1]), torch.tensor(Vh.shape[0])))
-        S[:k, :k] = torch.eye(k, device=self.device)
-        q = (U @ S @ Vh).to(self.device)
+        q = (U[:,:k] @ Vh).to(self.LatentCircuit.device)
         manifold = geoopt.Stiefel()
         self.q = geoopt.ManifoldParameter(q, manifold=manifold).to(self.LatentCircuit.device)
+
         return None
 
 
     def get_params(self):
         params = self.LatentCircuit.get_params()
-        params["U"] = deepcopy(self.Pr.detach().numpy())
-        params["q"] = deepcopy(self.q.detach().numpy())
+        params["U"] = deepcopy(self.Pr.detach().cpu().numpy())
+        params["q"] = deepcopy(self.q.detach().cpu().numpy())
         return params

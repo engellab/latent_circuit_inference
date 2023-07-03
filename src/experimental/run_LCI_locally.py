@@ -59,8 +59,8 @@ def R2(x, y):
 #              "0.007279_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
 #              "0.0072453_CDDM;relu;N=85;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
 #              "0.0066462_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000"]
-arguments = ['0.0073745_CDDM;relu;N=100;lmbdo=0.3;lmbdr=0.1;lr=0.002;maxiter=3000']
-tag = "8nodes;encoding"
+arguments = ['CDDMplus_relu;N=100;lmbdr=0.3;lmbdo=0.3_0.0072681_20230414-012759']
+tag = "8nodes;decoding"
 for RNN_folder in arguments:
     disp = False
     RNN_folder_full_path = os.path.join("/Users/tolmach/Documents/GitHub/rnn_coach/data/trained_RNNs/CDDM", f"{RNN_folder}")
