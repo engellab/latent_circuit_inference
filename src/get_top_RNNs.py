@@ -46,4 +46,4 @@ for folder in filtered_folders:
 
 array = np.array(tuples)
 array = pd.DataFrame(array).sort_values(0, ascending=True).to_numpy()
-print(array[:50, 1].tolist())
+print(array[:20, 1].tolist())

@@ -9,9 +9,13 @@ from scipy.sparse import random
 from scipy.stats import uniform
 from numpy.linalg import eig
 from pathlib import Path
+from matplotlib import pyplot as plt
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import ListedColormap
 import torch
+from rnn_coach.src.utils import get_colormaps
+colors, cmp = get_colormaps()
+red, blue, bluish, green, orange, lblue, violet = colors
 
 def get_project_root():
     return Path(__file__).parent.parent
@@ -125,3 +129,19 @@ def jsonify(dct):
         else:
             dct_jsonified[key] = dct[key]
     return dct_jsonified
+
+
+def plot_matrix(mat, vmin=None, vmax=None, show_numbers = False, figsize = (7,7)):
+    if vmin is None:
+        vmin = np.min(mat)
+    if vmax is None:
+        vmax = np.max(mat)
+    fig, ax = plt.subplots(1, 1, figsize = figsize)
+    img = ax.imshow(mat, cmap=cmp, vmin = vmin, vmax = vmax)
+    if show_numbers:
+        for (i, j), z in np.ndenumerate(mat):
+            if np.abs(z) > 0.01:
+                ax.text(j, i, str(np.round(z, 2)), ha="center", va="center", color='k', fontsize=7)
+    ax.set_xticks(np.arange(mat.shape[1])[::2])
+    ax.set_yticks(np.arange(mat.shape[0])[::2])
+    plt.show()

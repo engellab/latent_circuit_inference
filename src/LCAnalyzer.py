@@ -3,17 +3,56 @@ from copy import deepcopy
 sys.path.append("../../")
 from rnn_coach.src.PerformanceAnalyzer import *
 from latent_circuit_inference.src.utils import *
+from latent_circuit_inference.src.CircuitVizualization import *
 import numpy as np
 from matplotlib import pyplot as plt
-from latent_circuit_inference.src.circuit_vizualization import Graph
 from matplotlib.patches import Patch
 colors, cmap = get_colormaps()
 red, blue, bluish, green, orange, lblue, violet = colors
+
 
 class LCAnalyzer(PerformanceAnalyzerCDDM):
     def __init__(self, rnn_numpy, labels):
         PerformanceAnalyzerCDDM.__init__(self, rnn_numpy)
         self.labels = labels
+
+    def plot_output_matrix(self):
+        w_out = self.RNN.W_out
+        n = self.RNN.N
+
+        fig_w_out = plt.figure()
+        ax = plt.gca()
+        im = ax.imshow(self.RNN.W_out, interpolation='blackman', cmap=cmap)
+        fig_w_out.colorbar(im)
+        for (i, j), z in np.ndenumerate(w_out):
+            if np.abs(z) >= 0.05:
+                if z >= -1:
+                    ax.text(j, i, str(np.round(z, 2)), ha="center", va="center", color='k')
+                if z < -1:
+                    ax.text(j, i, str(np.round(z, 2)), ha="center", va="center", color='w')
+        # ax.set_title("Connectivity matrix", fontsize = 16, pad=10)
+        im = ax.imshow(w_out, interpolation='none', vmin=-np.max(np.abs(w_out)), vmax=np.max(np.abs(w_out)), cmap=cmap)
+        fig_w_out.tight_layout()
+        return fig_w_out
+
+    def plot_input_matrix(self):
+        w_inp = self.RNN.W_inp
+        n = self.RNN.N
+
+        fig_w_inp = plt.figure()
+        ax = plt.gca()
+        im = ax.imshow(self.RNN.W_inp, interpolation='blackman', cmap=cmap)
+        fig_w_inp.colorbar(im)
+        for (i, j), z in np.ndenumerate(w_inp):
+            if np.abs(z) >= 0.05:
+                if z >= -1:
+                    ax.text(j, i, str(np.round(z, 2)), ha="center", va="center", color='k')
+                if z < -1:
+                    ax.text(j, i, str(np.round(z, 2)), ha="center", va="center", color='w')
+        # ax.set_title("Connectivity matrix", fontsize = 16, pad=10)
+        im = ax.imshow(w_inp, interpolation='none', vmin=-np.max(np.abs(w_inp)), vmax=np.max(np.abs(w_inp)), cmap=cmap)
+        fig_w_inp.tight_layout()
+        return fig_w_inp
 
     def plot_recurrent_matrix(self):
         w_rec = self.RNN.W_rec
@@ -78,25 +117,20 @@ class LCAnalyzer(PerformanceAnalyzerCDDM):
         return fig_w_rec_comparison
 
 
-    def plot_circuit_graph(self):
+    def plot_circuit(self, labels = None):
         w_rec = deepcopy(self.RNN.W_rec)
-        positions = [np.array([-0.05, 0.75]),
-                     np.array([0.35, 0.7]),
-                     np.array([-0.6, 0.4]),
-                     np.array([-0.75, 0.0]),
-                     np.array([-0.75, -0.4]),
-                     np.array([-0.6, -0.8]),
-                     np.array([0.6, 0.0]),
-                     np.array([0.6, -0.4])]
-        np.fill_diagonal(w_rec, 0)
-        G = Graph(node_labels=self.labels, positions=positions, W=w_rec)
+        w_inp = None
+        w_out = None
+
+        G = Graph(W_inp=w_inp, W_rec=w_rec, W_out=w_out, cutoff_weight=0, labels=labels)
         G.set_nodes()
-        G.set_edges_from_matrix()
-        G.optimize_connections()
-        G.draw_nodes()
+        G.set_rec_edges_from_matrix()
+        G.curve_connections()
+        G.painter = Painter()
         G.draw_edges()
+        G.draw_nodes()
         plt.tight_layout()
-        return G.painter.figure
+        return G.painter.figure, G.painter.ax
 
     def plot_selection_vectors(self, Q, LA_data_lc, LA_data_RNN):
         error_kw = {"ecolor": colors[5], "elinewidth": 1, "capsize": 3, "capthick": 1, "barsabove": True}

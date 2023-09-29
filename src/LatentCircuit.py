@@ -17,6 +17,7 @@ class LatentCircuit(torch.nn.Module):
                  rec_connectivity_mask=None,
                  inp_connectivity_mask=None,
                  out_connectivity_mask=None,
+                 dale_mask = None,
                  random_generator=None,
                  device=None):
         super(LatentCircuit, self).__init__()
@@ -55,6 +56,10 @@ class LatentCircuit(torch.nn.Module):
         self.input_layer.weight.data *= (self.inp_connectivity_mask)
         self.recurrent_layer.weight.data *= (self.rec_connectivity_mask)
         self.output_layer.weight.data *= (self.out_connectivity_mask)
+        if dale_mask is None:
+            self.dale_mask = None
+        else:
+            self.dale_mask = torch.from_numpy(dale_mask).to(self.device)
 
         self.x = torch.zeros(self.N, device=self.device)
 
@@ -118,9 +123,9 @@ class LatentCircuit(torch.nn.Module):
         return param_dict
 
     def set_params(self, params):
-        self.output_layer.weight.data = torch.from_numpy(params["W_out"]).to(self.device)
-        self.input_layer.weight.data = torch.from_numpy(params["W_inp"]).to(self.device)
-        self.recurrent_layer.weight.data = torch.from_numpy(params["W_rec"]).to(self.device)
+        self.output_layer.weight.data = torch.from_numpy(params["W_out"].astype("float32")).to(self.device)
+        self.input_layer.weight.data = torch.from_numpy(params["W_inp"].astype("float32")).to(self.device)
+        self.recurrent_layer.weight.data = torch.from_numpy(params["W_rec"].astype("float32")).to(self.device)
         return None
 
 # if __name__ == '__main__':

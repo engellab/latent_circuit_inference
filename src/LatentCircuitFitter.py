@@ -31,7 +31,8 @@ def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_los
 
 
 class LatentCircuitFitter():
-    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, lr, criterion, lambda_w, encoding, Qinitialization):
+    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, lr, criterion, lambda_w, encoding,
+                 Qinitialization, penalty_type=2):
         '''
         :param RNN: LatentCircuit (specific template class)
         :param RNN: pytorch RNN (specific template class)
@@ -54,6 +55,7 @@ class LatentCircuitFitter():
         self.lambda_w = lambda_w
         self.encoding = encoding
         self.Qinitialization = Qinitialization
+        self.penalty_type = penalty_type
         self.device = self.LatentCircuit.device
 
         input_batch, target_batch, _ = self.Task.get_batch()
@@ -128,13 +130,16 @@ class LatentCircuitFitter():
     def train_step(self, input, y, predicted_output_RNN):
         self.LatentCircuit.train()
         x, predicted_output_lc = self.LatentCircuit(input)
-
+        if self.penalty_type == 'l1':
+            p = 1
+        elif self.penalty_type == 'l2':
+            p = 2
+        else:
+            raise(ValueError(f"The penalty type {self.penalty_type} is not defined!"))
         loss = self.criterion(predicted_output_lc, predicted_output_RNN) / torch.var(predicted_output_RNN, unbiased=False) + \
-               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, 2)) + \
+               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, p)) + \
                self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.input_layer.weight, 2)) + \
-               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2)) #+ \
-               # self.lambda_w * torch.mean(torch.abs(self.Pr.T @ self.q))  # add extra sparsity penalty!
-               # self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.bias, 2)) + \
+               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2))
 
         if self.encoding:
             x_emb = torch.einsum("ji, ikp->jkp", self.q, x)
@@ -150,10 +155,21 @@ class LatentCircuitFitter():
         # projection back to constrained space
         device = self.LatentCircuit.device
         self.LatentCircuit.input_layer.weight.data *= self.LatentCircuit.inp_connectivity_mask.to(device)
-        # keeping the W_inp positive
-        self.LatentCircuit.input_layer.weight.data *= (torch.sign(self.LatentCircuit.input_layer.weight.data) + 1) / 2
-        self.LatentCircuit.recurrent_layer.weight.data *= self.LatentCircuit.rec_connectivity_mask.to(device)
         self.LatentCircuit.output_layer.weight.data *= self.LatentCircuit.out_connectivity_mask.to(device)
+
+        # keeping the W_inp, W_rec positive
+        self.LatentCircuit.input_layer.weight.data *= torch.tensor(self.LatentCircuit.input_layer.weight.data > 0)
+        self.LatentCircuit.output_layer.weight.data *= torch.tensor(self.LatentCircuit.output_layer.weight.data > 0)
+
+        self.LatentCircuit.recurrent_layer.weight.data *= self.LatentCircuit.rec_connectivity_mask.to(device)
+
+        if self.LatentCircuit.dale_mask is None:
+            pass
+        else:
+            self.LatentCircuit.output_layer.weight.data = torch.tensor(self.LatentCircuit.output_layer.weight.data * (self.LatentCircuit.dale_mask > 0))
+            self.LatentCircuit.recurrent_layer.weight.data = (torch.maximum(
+                self.LatentCircuit.recurrent_layer.weight.data * self.LatentCircuit.dale_mask.to(self.LatentCircuit.device),
+                torch.tensor(0)) * self.LatentCircuit.dale_mask.to(self.LatentCircuit.device)).to(self.LatentCircuit.device)
         return loss.item()
 
     def eval_step(self, input, y, predicted_output_rnn):

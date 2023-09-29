@@ -15,7 +15,7 @@ from rnn_coach.src.RNN_numpy import RNN_numpy
 from scipy.sparse.linalg import lsqr
 from copy import deepcopy
 from sklearn.decomposition import PCA
-
+from pathlib import Path
 
 # RNNs = []
 # for folder in os.listdir(os.path.join('../', '../', "data", "inferred_LCs")):
@@ -52,26 +52,29 @@ from sklearn.decomposition import PCA
 #     # plt.show()
 #     print(RNNs_filtered)
 
-RNNs_filtered = ['0.0066581_CDDM;relu;N=91;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000', '0.0068477_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000', '0.0065229_CDDM;relu;N=86;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000', '0.0068383_CDDM;relu;N=92;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000', '0.0065435_CDDM;relu;N=91;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000', '0.0069985_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000', '0.0070495_CDDM;relu;N=98;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000']
-RNN_folder = RNNs_filtered[6]
-RNN_score = float(RNN_folder.split("_")[0])
-RNN_path = os.path.join('../', '../', '../', "rnn_coach", "data", "trained_RNNs", "CDDM", RNN_folder)
-LC_folder_path = os.path.join('../', '../', "data", "inferred_LCs", RNN_folder)
-subfolders = os.listdir(LC_folder_path)
+home = str(Path.home()) + "/Documents/GitHub/"
+RNN = "0.0117232_CDDM;relu;N=100;lmbdo=0.3;lmbdr=0.5;lr=0.002;maxiter=3000"
+RNNs_path = os.path.join(home, "latent_circuit_inference", "data", "inferred_LCs")
+num_points = 31
+offset = 5
+RNN_score = float(RNN.split("_")[0])
+RNN_path = os.path.join(RNNs_path, RNN)
+LCs = os.listdir(RNN_path)
+try:
+    LCs.remove('.DS_Store')
+except:
+    pass
+LC_scores = [float(LC.split("_")[0]) for LC in LCs]
+LC_scores_pr = [float(LC.split("_")[1]) for LC in LCs]
+LC_scores,LC_scores_pr, LCs = zip(*sorted(zip(LC_scores,LC_scores_pr, LCs), reverse=True))
+top_LC = LCs[0]
 ind = 0
-max_score = -10
-for i, subfolder in enumerate(subfolders):
-    if "8nodes" in subfolder:
-        score = float(subfolder.split("_")[0])
-        if max_score <= score:
-            max_score = score
-            ind = i
-LC_subfolder = subfolders[ind]
-LC_path = os.path.join('../', '../', "data", "inferred_LCs", RNN_folder, LC_subfolder)
+LC_path = os.path.join(home, "latent_circuit_inference", "data", "inferred_LCs", RNN, top_LC)
 print(LC_path)
-LC_data = json.load(open(os.path.join(LC_path, f"{max_score}_LC_params.json"), "rb+"))
-RNN_data = json.load(open(os.path.join(RNN_path, f"{RNN_score}_params_CDDM.json"), "rb+"))
-RNN_config_file = json.load(open(os.path.join(RNN_path, f"{RNN_score}_config.json"), "rb+"))
+LC_data = json.load(open(os.path.join(LC_path, f"{LC_scores[0]}_{LC_scores_pr[0]}_LC_params.json"), "rb+"))
+
+RNN_data = json.load(open(os.path.join(RNN_path, f"{LC_scores[0]}_{LC_scores_pr[0]}_LC_8nodes;encoding", f"{RNN_score}_params_CDDM.json"), "rb+"))
+RNN_config_file = json.load(open(os.path.join(RNN_path, f"{LC_scores[0]}_{LC_scores_pr[0]}_LC_8nodes;encoding", f"{RNN_score}_config.json"), "rb+"))
 
 U = np.array(LC_data["U"])
 q = np.array(LC_data["q"])
@@ -80,7 +83,7 @@ Q = U.T @ q
 w_out = np.array(LC_data["W_out"])
 w_rec = np.array(LC_data["W_rec"])
 w_inp = np.array(LC_data["W_inp"])
-n = LC_data["n"]
+n = LC_data["N"]
 N = LC_data["N"]
 dt = LC_data["dt"]
 tau = LC_data["tau"]
@@ -201,7 +204,7 @@ ax[0, 0].title.set_text('qmR - qmL, motion context')
 ax[0, 1].title.set_text('TDR motion, motion context')
 ax[1, 0].title.set_text('qcR - qcL, color context')
 ax[1, 1].title.set_text('TDR color, color context')
-plt.savefig(os.path.join("../", "../", "img", f"{RNN_folder}_QvsTDR.png"))
+# plt.savefig(os.path.join("../", "../", "img", f"{RNN_folder}_QvsTDR.png"))
 plt.close(fig)
 plt.show()
 
