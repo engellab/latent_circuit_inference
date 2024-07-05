@@ -2,8 +2,8 @@ import sys
 import os
 from scipy.interpolate import interp1d
 sys.path.insert(0, os.getcwd())
-sys.path.insert(0, './')
 sys.path.insert(0, '../')
+sys.path.insert(0, '../../')
 import numpy as np
 from scipy.sparse import random
 from scipy.stats import uniform

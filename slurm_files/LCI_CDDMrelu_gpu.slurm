@@ -17,5 +17,5 @@ module load anaconda3/2022.10
 
 # Activate conda environment
 conda activate RNN_training_pipeline
-python ~/latent_circuit_inference/src/set_LCI_config.py
-python ~/latent_circuit_inference/src/run_LCI.py $1
+python ~/latent_circuit_inference/src/set_configs/set_LCI_CDDMrelu_config.py
+python ~/latent_circuit_inference/src/run_inference/run_LCI_CDDMrelu.py $1

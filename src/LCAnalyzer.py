@@ -2,7 +2,7 @@ import sys
 from copy import deepcopy
 sys.path.append("../../")
 from rnn_coach.src.PerformanceAnalyzer import *
-from latent_circuit_inference.src.utils import *
+from latent_circuit_inference.src.misc.utils import *
 from latent_circuit_inference.src.CircuitVizualization import *
 import numpy as np
 from matplotlib import pyplot as plt

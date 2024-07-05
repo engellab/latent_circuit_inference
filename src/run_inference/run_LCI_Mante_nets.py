@@ -1,6 +1,6 @@
 import sys
 from copy import deepcopy
-sys.path.append("./")
+sys.path.append("../experimental/")
 sys.path.append("../")
 sys.path.append("../../")
 from pathlib import Path

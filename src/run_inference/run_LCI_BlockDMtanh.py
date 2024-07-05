@@ -1,6 +1,6 @@
 import sys
 from copy import deepcopy
-sys.path.append("./")
+sys.path.append("../experimental/")
 sys.path.append("../")
 sys.path.append("../../")
 from pathlib import Path
@@ -43,8 +43,8 @@ def R2(x, y):
 print(f"system arguments: {sys.argv}")
 print(f"system arguments: {sys.argv}")
 # RNN_folder = sys.argv[1]
-RNN_folder = '0.0035558_CDDMtanh;tanh;N=100;lmbdo=0.3;lmbdr=0.5;lr=0.002;maxiter=3000'
-tag = 'CDDMtanh'
+RNN_folder = '0.0011968_BlockDMtanh;tanh;N=100;lmbdo=0.3;lmbdr=0.5;lr=0.002;maxiter=3000'
+tag = 'BlockDMtanh'
 taskname = RNN_folder.split("_")[1].split(";")[0]
 data_save_path = os.path.join(data_save_path, taskname)
 disp = False
@@ -56,12 +56,12 @@ rnn_config = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}
 rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_{taskname}.json"), "rb+"))
 LCI_config_file = json.load(open(os.path.join(LC_configs_path, f"LCI_config_{tag}.json"), mode="r", encoding="utf-8"))
 task_data = rnn_config["task_params"]
-tmp = task_data["coherences"][-1] * np.logspace(-(5 - 1), 0, 5, base=2)
+tmp = task_data["coherences"][-1] * np.logspace(-(7 - 1), 0, 7, base=2)
 coherences = np.concatenate([-np.array(tmp[::-1]), np.array([0]), np.array(tmp)]).tolist()
 
 task_data["coherences"] = deepcopy(coherences)
 
-for N_LC in [6, 7, 8]:
+for N_LC in [8, 9]:
     for trial in range(15):
         print(RNN_folder, trial)
         # defining RNN:
@@ -94,7 +94,6 @@ for N_LC in [6, 7, 8]:
         # Task:
         n_steps = task_data["n_steps"]
 
-        # LC
         N = N_LC # LCI_config_file["N"]
         N_PCs = LCI_config_file["N_PCs"]
         w_inp = np.zeros((N, input_size))
@@ -130,9 +129,9 @@ for N_LC in [6, 7, 8]:
                       "b_rec": np.array(rnn_data["bias_rec"]),
                       "y_init": np.zeros(RNN_N)}
         rnn_torch.set_params(RNN_params)
-        task = TaskCDDMtanh(n_steps=n_steps, n_inputs = input_size, n_outputs = output_size, task_params=task_data)
+        task = TaskBlockDMtanh(n_steps=n_steps, task_params=task_data)
 
-        lc = LatentCircuit(N=N_LC,
+        lc = LatentCircuit(N=N,
                            W_inp=torch.Tensor(w_inp).to(device),
                            W_out=torch.Tensor(w_out).to(device),
                            num_inputs=input_size,
@@ -243,10 +242,8 @@ for N_LC in [6, 7, 8]:
 
         w_rec = net_params["W_rec"]
         labels = np.arange(N_LC).tolist()
-        labels[0] = 'ctx M'
-        labels[1] = 'ctx C'
-        labels[2] = 'motion'
-        labels[3] = 'color'
+        labels[0] = 'block'
+        labels[1] = 'inp'
         fig_circuit, ax = analyzer.plot_circuit(labels)
         datasaver.save_figure(fig_circuit, f"{r2_tot}_{r2_proj}_LC_circuit.png")
         if disp: plt.show()

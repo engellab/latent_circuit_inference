@@ -1,5 +1,5 @@
 import sys
-sys.path.append("../../")
+sys.path.append("../../../")
 # from rnn_coach.src.datajoint.datajoint_config import *
 import pandas as pd
 import numpy as np
@@ -33,7 +33,7 @@ def R2(x, y):
 # print(networks_sorted[:50])
 
 # other way
-data_path = os.path.join("../", "../", "rnn_coach", "data", "trained_RNNs", "CDDM")
+data_path = os.path.join("../../", "../", "rnn_coach", "data", "trained_RNNs", "CDDM")
 folders = os.listdir(data_path)
 filtered_folders = []
 for folder in folders:

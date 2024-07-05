@@ -11,6 +11,7 @@ class LatentCircuit(torch.nn.Module):
     '''
     def __init__(self, N, W_inp, W_out,
                  activation,
+                 W_rec = None,
                  dt=1, tau=10,
                  num_inputs=6, num_outputs=2,
                  sigma_rec=0.03, sigma_inp=0.03,
@@ -48,7 +49,10 @@ class LatentCircuit(torch.nn.Module):
 
         self.input_layer.weight.data = W_inp.float().to(device=self.device)
         self.output_layer.weight.data = W_out.float().to(device=self.device)
-        self.recurrent_layer.weight.data = torch.zeros((self.N, self.N)).float().to(device=self.device)
+        if not (W_rec is None):
+            self.recurrent_layer.weight.data = torch.Tensor(W_rec).float().to(device=self.device)
+        else:
+            self.recurrent_layer.weight.data = torch.zeros((self.N, self.N)).float().to(device=self.device)
         self.inp_connectivity_mask = torch.Tensor(inp_connectivity_mask).to(self.device)
         self.rec_connectivity_mask = torch.Tensor(rec_connectivity_mask).to(self.device)
         self.out_connectivity_mask = torch.Tensor(out_connectivity_mask).to(self.device)
@@ -59,7 +63,7 @@ class LatentCircuit(torch.nn.Module):
         if dale_mask is None:
             self.dale_mask = None
         else:
-            self.dale_mask = torch.from_numpy(dale_mask).to(self.device)
+            self.dale_mask = torch.from_numpy(dale_mask).to(torch.float32).to(self.device)
 
         self.x = torch.zeros(self.N, device=self.device)
 

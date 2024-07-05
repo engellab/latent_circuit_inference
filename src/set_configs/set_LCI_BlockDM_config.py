@@ -35,12 +35,16 @@ config_dict["N"] = N
 config_dict["N_PCs"] = 12
 config_dict["num_inputs"] = num_inputs
 config_dict["num_outputs"] = num_outputs
+
 W_inp = np.zeros((N, num_inputs))
 W_inp[:num_inputs, :num_inputs] = np.eye(num_inputs)
 W_out = np.zeros((num_outputs, N))
 W_out[:, num_inputs:] = 1
+
 config_dict["W_inp"] = W_inp.tolist()
 config_dict["W_out"] = W_out.tolist()
+
+
 config_dict["activation"] = 'tanh'
 config_dict["dt"] = dt
 config_dict["tau"] = tau

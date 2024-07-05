@@ -28,16 +28,47 @@ def mse_scoring(x, y):
 def R2(x, y):
     return 1.0 - mse_scoring(x, y)/np.var(y)
 
-arguments = ['0.0071472_CDDMplus;relu;N=100;lmbdo=0.3;lmbdr=0.3;lr=0.002;maxiter=3000']
+# arguments = ["0.0064612_CDDM;relu;N=92;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0068963_CDDM;relu;N=89;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0065229_CDDM;relu;N=86;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0066581_CDDM;relu;N=91;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0073767_CDDM;relu;N=98;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070495_CDDM;relu;N=98;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070738_CDDM;relu;N=90;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0065982_CDDM;relu;N=90;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0069985_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070679_CDDM;relu;N=99;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0066949_CDDM;relu;N=90;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0073224_CDDM;relu;N=87;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0069855_CDDM;relu;N=90;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0067739_CDDM;relu;N=95;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0069802_CDDM;relu;N=87;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0075082_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0065435_CDDM;relu;N=91;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070801_CDDM;relu;N=89;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070615_CDDM;relu;N=89;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0066214_CDDM;relu;N=93;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.008884_CDDM;relu;N=90;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0068477_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0068383_CDDM;relu;N=92;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0066983_CDDM;relu;N=89;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070526_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0069759_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0070948_CDDM;relu;N=90;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0069969_CDDM;relu;N=92;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.007279_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0072453_CDDM;relu;N=85;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000",
+#              "0.0066462_CDDM;relu;N=88;lmbdo=0.3;lmbdr=0.0;lr=0.002;maxiter=3000"]
+arguments = ['CDDMplus_relu;N=100;lmbdr=0.3;lmbdo=0.3_0.0072681_20230414-012759']
 tag = "8nodes;decoding"
 for RNN_folder in arguments:
     disp = False
-    RNN_folder_full_path = os.path.join("/Users/tolmach/Documents/GitHub/rnn_coach/data/trained_RNNs/CDDMplus", f"{RNN_folder}")
+    RNN_folder_full_path = os.path.join("/Users/tolmach/Documents/GitHub/rnn_coach/data/trained_RNNs/CDDM", f"{RNN_folder}")
     mse_score_RNN = RNN_folder.split("_")[0]
 
     rnn_config = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_config.json"), "rb+"))
-    rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_CDDMplus.json"), "rb+"))
-    LCI_config_file = json.load(open(os.path.join("/Users/tolmach/Documents/GitHub/latent_circuit_inference", "data", "configs", f"LCI_config_{tag}.json"), mode="r", encoding="utf-8"))
+    rnn_data = json.load(open(os.path.join(RNN_folder_full_path, f"{mse_score_RNN}_params_CDDM.json"), "rb+"))
+    LCI_config_file = json.load(open(os.path.join("/", "data", "configs", f"LCI_config_{tag}.json"), mode="r", encoding="utf-8"))
     task_data = rnn_config["task_params"]
     tmp = task_data["coherences"][-1] * np.logspace(-(5 - 1), 0, 5, base=2)
     coherences = np.concatenate([-np.array(tmp[::-1]), np.array([0]), np.array(tmp)]).tolist()
@@ -104,11 +135,11 @@ for RNN_folder in arguments:
                               sigma_rec=sigma_rec, sigma_inp=sigma_inp)
         RNN_params = {"W_inp": np.array(rnn_data["W_inp"]),
                       "W_rec": np.array(rnn_data["W_rec"]),
-                      "W_out": np.array(rnn_data["W_out"])[:2, :],
+                      "W_out": np.array(rnn_data["W_out"]),
                       "b_rec": np.array(rnn_data["bias_rec"]),
                       "y_init": np.zeros(RNN_N)}
         rnn_torch.set_params(RNN_params)
-        task = TaskCDDM(n_steps=n_steps, n_inputs=input_size, n_outputs=2, task_params=task_data)
+        task = TaskCDDM(n_steps=n_steps, n_inputs=input_size, n_outputs=output_size, task_params=task_data)
 
         lc = LatentCircuit(N=N,
                            W_inp=torch.Tensor(w_inp).to(device),
@@ -215,10 +246,10 @@ for RNN_folder in arguments:
         # saving RNN data alongside
         try:
             datasaver.save_data(jsonify(rnn_config), f"{mse_score_RNN}_config.json")
-            datasaver.save_data(jsonify(rnn_data), f"{mse_score_RNN}_params_CDDMplus.json")
+            datasaver.save_data(jsonify(rnn_data), f"{mse_score_RNN}_params_CDDM.json")
         except:
             datasaver.save_data(rnn_config, f"{mse_score_RNN}_config.pkl")
-            datasaver.save_data(rnn_data, f"{mse_score_RNN}_params_CDDMplus.pkl")
+            datasaver.save_data(rnn_data, f"{mse_score_RNN}_params_CDDM.pkl")
 
         w_rec = net_params["W_rec"]
         fig_w_rec = analyzer.plot_recurrent_matrix()
