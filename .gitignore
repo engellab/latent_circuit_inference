@@ -7,3 +7,4 @@
 *.pkl
 /data/
 /data/*
+/latent_circuit_inference/run_inference/outputs

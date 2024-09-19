@@ -1,0 +1,13 @@
+LC_fitter:
+  N_PCs: 30
+  encoding: true
+  max_iter: 2000
+  tol: 1.0e-08
+  lr: 0.02
+  lambda_w: 0.08
+  Qinitialization: false
+configs_path: /Users/tolmach/Documents/GitHub/latent_circuit_inference/configs
+n_repeats: 5
+n_units: 8
+RNN_parent_folder: CDDM_relu_constrained=True
+RNN_subfolder: 0.0068407_CDDM_relu;N=94;lmbdo=0.3;orth_inp_only=True;lmbdr=0.5;lr=0.005;maxiter=5000

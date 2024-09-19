@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: latent_circuit_inference
+Version: 0.1
+Summary: Inferring low dimensional circuits from RNNs dynamics
+Home-page: https://github.com/engellab/latent_circuit_inference
+Author: Pavel Tolmachev
+Author-email: pt1290@princeton.edu
+License: MIT
+License-File: LICENSE

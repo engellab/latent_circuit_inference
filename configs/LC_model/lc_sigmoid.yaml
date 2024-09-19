@@ -1,0 +1,14 @@
+# @package LC_model
+_target_: latent_circuit_inference.LatentCircuit.LatentCircuit
+activation_name: 'sigmoid'
+activation_slope: 7.5
+dt: 1
+tau: 10
+sigma_rec: .05
+sigma_inp: .05
+device: "cpu"
+
+
+
+
+

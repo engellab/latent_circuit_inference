@@ -1,0 +1,14 @@
+# @package LC_model
+_target_: latent_circuit_inference.LatentCircuit.LatentCircuit
+activation_name: 'relu'
+activation_slope: 1.0
+dt: 1
+tau: 10
+sigma_rec: .05
+sigma_inp: .05
+device: "cpu"
+
+
+
+
+

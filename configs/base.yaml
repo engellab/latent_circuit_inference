@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - /LC_fitter: standard
+  - _self_
+configs_path: "/Users/tolmach/Documents/GitHub/latent_circuit_inference/configs"
+n_repeats: 5
+n_units: ???
+RNN_parent_folder: ???
+RNN_subfolder: ???

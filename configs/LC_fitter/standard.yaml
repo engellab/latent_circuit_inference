@@ -1,0 +1,13 @@
+# @package LC_fitter
+N_PCs: 30
+encoding: True
+max_iter: 2000
+tol: 1e-08
+lr: 0.02
+lambda_w: 0.08
+Qinitialization: False
+
+
+
+
+
