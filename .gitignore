@@ -1,10 +1,12 @@
 /img/
-/data/inferred_LCs/
 *png
 *pkl
 /data/inferred_LCs/*
+/data/inferred_LCs/
 *.png
 *.pkl
 /data/
 /data/*
 /latent_circuit_inference/run_inference/outputs
+/slurm_files/
+*/outputs
