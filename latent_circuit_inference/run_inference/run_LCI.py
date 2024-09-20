@@ -10,12 +10,12 @@ import numpy as np
 import json
 import os
 import torch
-import rnn_coach
-from rnn_coach.training.training_utils import prepare_task_arguments, get_training_mask
-from rnn_coach.RNNs.RNN_torch import *
-from rnn_coach.RNNs.RNN_numpy import *
-from rnn_coach.Tasks import *
-from rnn_coach.datasaver.DataSaver import *
+import trainRNNbrain
+from trainRNNbrain.training.training_utils import prepare_task_arguments, get_training_mask
+from trainRNNbrain.tnns.RNN_torch import *
+from trainRNNbrain.rnns.RNN_numpy import *
+from trainRNNbrain.tasks import *
+from trainRNNbrain.datasaver.DataSaver import *
 from latent_circuit_inference.LatentCircuit import LatentCircuit
 from latent_circuit_inference.LatentCircuitFitter import *
 from latent_circuit_inference.LCAnalyzer import *

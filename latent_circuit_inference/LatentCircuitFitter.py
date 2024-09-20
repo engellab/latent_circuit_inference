@@ -4,8 +4,6 @@ Class which accepts LatentCircuit, an RNN_torch and a task instances and fits th
 import numpy as np
 import torch
 from copy import deepcopy
-
-import geoopt
 from geoopt.optim import RiemannianAdam
 from scipy.sparse.linalg import lsqr
 import geoopt
@@ -32,7 +30,7 @@ def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_los
 
 class LatentCircuitFitter():
     def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, lr, criterion, lambda_w, encoding,
-                 Qinitialization, penalty_type='l2'):
+                 Qinitialization, penalty_type='l2', lambda_variance=0.025):
         '''
         :param RNN: LatentCircuit (specific template class)
         :param RNN: pytorch RNN (specific template class)
@@ -53,6 +51,7 @@ class LatentCircuitFitter():
         self.lr = lr
         self.criterion = criterion
         self.lambda_w = lambda_w
+        self.lambda_variance = lambda_variance
         self.encoding = encoding
         self.Qinitialization = Qinitialization
         self.penalty_type = penalty_type
@@ -148,10 +147,10 @@ class LatentCircuitFitter():
 
         if self.encoding:
             x_emb = torch.einsum("ji, ikp->jkp", self.q, x)
-            loss += 0.025 * self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
+            loss += self.lambda_variance * self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
         else:
             y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
-            loss += 0.025 * self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
+            loss += self.lambda_variance * self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
 
         self.optimizer.zero_grad()
         loss.backward()

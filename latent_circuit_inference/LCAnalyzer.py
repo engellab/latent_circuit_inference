@@ -1,7 +1,7 @@
 import sys
 from copy import deepcopy
 sys.path.append("../../")
-from rnn_coach.analyzers.PerformanceAnalyzer import *
+from trainRNNbrain.analyzers.PerformanceAnalyzer import *
 from latent_circuit_inference.utils.utils import *
 from latent_circuit_inference.CircuitVizualization import *
 import numpy as np
