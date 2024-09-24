@@ -1,3 +1,0 @@
-- +RNN_parent_folder='CDDM_relu_constrained=True'
-- +RNN_subfolder='0.0068407_CDDM_relu;N=94;lmbdo=0.3;orth_inp_only=True;lmbdr=0.5;lr=0.005;maxiter=5000'
-- n_units=8
