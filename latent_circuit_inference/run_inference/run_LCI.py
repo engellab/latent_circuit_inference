@@ -1,7 +1,5 @@
 import sys
-
 from latent_circuit_inference.utils.plotting_functions import plot_connectivity
-from latent_circuit_inference.utils.utils import set_paths
 sys.path.append("../experimental/")
 sys.path.append("../")
 sys.path.append("../../")
@@ -12,7 +10,7 @@ import os
 import torch
 import trainRNNbrain
 from trainRNNbrain.training.training_utils import prepare_task_arguments, get_training_mask
-from trainRNNbrain.tnns.RNN_torch import *
+from trainRNNbrain.rnns.RNN_torch import *
 from trainRNNbrain.rnns.RNN_numpy import *
 from trainRNNbrain.tasks import *
 from trainRNNbrain.datasaver.DataSaver import *
@@ -24,10 +22,32 @@ from omegaconf import OmegaConf, DictConfig
 import hydra
 
 
+def set_paths(parent_folder):
+    from pathlib import Path
+    home = str(Path.home())
+    print(f"Home directory: {home}")
+    if home == '/home/pt1290':
+        project_folder = home
+        data_save_path = f'/../../../../scratch/gpfs/pt1290/latent_circuit_inference/data/inferred_LCs/{parent_folder}'
+        trained_RNNs_path = f'/../../../../scratch/gpfs/pt1290/trainRNNbrain/data/trained_RNNs/{parent_folder}'
+    elif home == '/Users/tolmach':
+        projects_folder = home + '/Documents/GitHub'
+        data_save_path = os.path.join(projects_folder, f'latent_circuit_inference/data/inferred_LCs/{parent_folder}')
+        trained_RNNs_path = os.path.join(projects_folder, f'trainRNNbrain/data/trained_RNNs/{parent_folder}')
+    else:
+        pass
+    os.makedirs(data_save_path, exist_ok=True)
+    return trained_RNNs_path, data_save_path
+
 OmegaConf.register_new_resolver("eval", eval)
 os.environ['HYDRA_FULL_ERROR'] = '1'
 show = False
-# @hydra.main(version_base="1.3", config_path="../../configs/", config_name=f"base")
+
+#either run the script from IDE with the first decorator
+# or run the script from shell like that:
+# 'python run_LCI.py +RNN_parent_folder="CDDM_relu_constrained\=True" +RNN_subfolder=\"0.00759_CDDM_relu\;N\=94\;lmbdo\=0.3\;orth_inp_only\=True\;lmbdr\=0.5\;lr\=0.005\;maxiter\=5000\" +n_units=8'
+# note the "\" symbols before "=" and ";"!
+# @hydra.main(version_base="1.3", config_path="../../configs/", config_name=f"CDDM_relu")
 @hydra.main(version_base="1.3", config_path="../../configs/", config_name=f"base")
 def run_LCI(cfg: DictConfig) -> None:
     RNN_parent_folder = cfg.RNN_parent_folder
@@ -70,7 +90,7 @@ def run_LCI(cfg: DictConfig) -> None:
 
     # defining the task
     # a little crutch here:
-    cfg.RNN_config.task._target_ = f"rnn_coach.Tasks.Task{taskname}.Task{taskname}"
+    cfg.RNN_config.task._target_ = f"trainRNNbrain.tasks.Task{taskname}.Task{taskname}"
     task_conf = prepare_task_arguments(cfg_task=cfg.RNN_config.task, dt=cfg.LC_model.dt)
     task = hydra.utils.instantiate(task_conf)
     cfg["task"] = task_conf

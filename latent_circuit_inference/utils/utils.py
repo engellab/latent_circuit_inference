@@ -17,23 +17,6 @@ from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import ListedColormap
 import torch
 
-def set_paths(parent_folder):
-    from pathlib import Path
-    home = str(Path.home())
-    print(f"Home directory: {home}")
-    if home == '/home/pt1290':
-        project_folder = home
-        data_save_path = f'/../../../../scratch/gpfs/pt1290/latent_circuit_inference/data/inferred_LCs/{parent_folder}'
-        trained_RNNs_path = f'/../../../../scratch/gpfs/pt1290/rnn_coach/data/trained_RNNs/{parent_folder}'
-    elif home == '/Users/tolmach':
-        projects_folder = home + '/Documents/GitHub'
-        data_save_path = os.path.join(projects_folder, f'latent_circuit_inference/data/inferred_LCs/{parent_folder}')
-        trained_RNNs_path = os.path.join(projects_folder, f'rnn_coach/data/trained_RNNs/{parent_folder}')
-    else:
-        pass
-    os.makedirs(data_save_path, exist_ok=True)
-    return trained_RNNs_path, data_save_path
-
 def get_project_root():
     return Path(__file__).parent.parent
 

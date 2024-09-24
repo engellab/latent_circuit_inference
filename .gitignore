@@ -1,4 +1,5 @@
 /img/
+!/img/Latent Circuit diagram.svg
 *png
 *pkl
 /data/inferred_LCs/*
@@ -10,3 +11,4 @@
 /latent_circuit_inference/run_inference/outputs
 /slurm_files/
 */outputs
+/log/
