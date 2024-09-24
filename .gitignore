@@ -1,7 +1,9 @@
+img/
 /img/
 /img/*
-/log/*
+log/
 /log/
+/log/*
 /slurm_files/*
 /data/
 /data/*
@@ -14,4 +16,6 @@
 */outputs
 */outputs/
 */outputs/*
+style/*
+/style/*
 
