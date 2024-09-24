@@ -2,7 +2,7 @@
 
 This package allows fitting a latent circuit into the trajectories of the original continuous-time recurrent neural network (See [Langdon et. al for details](https://www.biorxiv.org/content/10.1101/2022.01.23.477431v1)). The latent circuit fitting can be viewed as a model order reduction technique.
 
-<img src="img/Latent Circuit diagram.svg">
+<img src="fig/Latent Circuit diagram.svg">
 
 The main idea is to generate the trajectories **x**(t) with a small circuit (n units), embed it with matrix **Q** into the space of the original fitted trajectories **y**(t) (N units), and minimizie the differences Distance(**Qx**(t), **y**(t)), while simultaneuously ensuring that the small circuit performs the intended behavior well:
 
