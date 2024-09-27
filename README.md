@@ -16,7 +16,7 @@ One can start from the following [example Jupyter notebook](/jupyter/inferring l
 
 ### Dependencies
 
-This package relies on a [`trainRNNbrain`](link) package, make sure to download it and install it locally.
+This package relies on a [`trainRNNbrain`] package, make sure to download it and install it locally.
 
 
 
