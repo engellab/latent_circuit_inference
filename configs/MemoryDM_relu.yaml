@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - /LC_fitter: standard
+  - _self_
+configs_path: "../../configs"
+n_repeats: 5
+n_units: 6
+RNN_subfolder: "Jaiyi_RNN"
+RNN_parent_folder: "Jaiyi_RNN"
+

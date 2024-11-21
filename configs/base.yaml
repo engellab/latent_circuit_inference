@@ -2,8 +2,8 @@
 defaults:
   - /LC_fitter: standard
   - _self_
-configs_path: "/Users/tolmach/Documents/GitHub/latent_circuit_inference/configs"
+configs_path: "/home/pt1290/latent_circuit_inference/configs"
 n_repeats: 5
-n_units: ???
+n_units: 8
 RNN_parent_folder: ???
 RNN_subfolder: ???

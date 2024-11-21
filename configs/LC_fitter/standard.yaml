@@ -1,10 +1,11 @@
 # @package LC_fitter
-N_PCs: 30
+N_PCs: 10
 encoding: True
-max_iter: 2000
+max_iter: 2500
 tol: 1e-08
 lr: 0.02
-lambda_w: 0.08
+lambda_w: 0.1
+lambda_behavior: 0.25
 Qinitialization: False
 
 

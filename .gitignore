@@ -1,13 +1,9 @@
-img/
 /img/
 /img/*
 log/
 /log/
 /log/*
-/slurm_files/*
 /data/
-/data/*
-/data/inferred_LCs/*
 /data/inferred_LCs/
 *.png
 *.pkl
@@ -20,5 +16,4 @@ style/*
 /style/*
 .DS_Store
 */.DS_Store
-
-
+/latent_circuit_inference.egg-info/

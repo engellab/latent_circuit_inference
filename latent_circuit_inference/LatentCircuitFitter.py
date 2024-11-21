@@ -10,7 +10,6 @@ import geoopt
 from geoopt import Stiefel
 from sklearn.decomposition import IncrementalPCA as iPCA
 
-
 def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_loss):
     gr_prfx = '\033[92m'
     gr_sfx = '\033[0m'
@@ -29,8 +28,8 @@ def print_iteration_info(iter, train_loss, min_train_loss, val_loss, min_val_los
 
 
 class LatentCircuitFitter():
-    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, lr, criterion, lambda_w, encoding,
-                 Qinitialization, penalty_type='l2', lambda_variance=0.025):
+    def __init__(self, LatentCircuit, RNN, Task, N_PCs, max_iter, tol, lr, criterion, encoding,
+                 Qinitialization, penalty_type='l2', lambda_w=0.01, lambda_behavior=0.25):
         '''
         :param RNN: LatentCircuit (specific template class)
         :param RNN: pytorch RNN (specific template class)
@@ -51,10 +50,11 @@ class LatentCircuitFitter():
         self.lr = lr
         self.criterion = criterion
         self.lambda_w = lambda_w
-        self.lambda_variance = lambda_variance
+        self.lambda_behavior = lambda_behavior
         self.encoding = encoding
         self.Qinitialization = Qinitialization
         self.penalty_type = penalty_type
+        self.min_weight = 0.0001
         self.device = self.LatentCircuit.device
         print(f"Latent Circuit Fitter device {self.device}")
         input_batch, target_batch, _ = self.Task.get_batch()
@@ -89,21 +89,6 @@ class LatentCircuitFitter():
         params = list(self.LatentCircuit.parameters()) + [self.q]
         self.optimizer = RiemannianAdam(params, lr=self.lr)
 
-    # def make_orthonormal(self, q=None):
-    #     if q is None:
-    #         on_self = True
-    #         q = self.q
-    #     else:
-    #         on_self = False
-    #     U, s, Vh = torch.linalg.svd(q)
-    #     S = torch.zeros((U.shape[-1], Vh.shape[0]), device=self.device)
-    #     k = int(torch.minimum(torch.tensor(U.shape[-1]), torch.tensor(Vh.shape[0])))
-    #     S[:k, :k] = torch.eye(k, device=self.device)
-    #     if on_self is True:
-    #         self.q.data = (U @ S @ Vh).to(self.device)
-    #     else:
-    #         return U @ S @ Vh
-
     def set_projection(self):
         print("setting projection of RNN traces on the lower subspace")
         # do the PCA on RNN traces to lower the dimensionality!
@@ -130,67 +115,56 @@ class LatentCircuitFitter():
     def train_step(self, input, y, predicted_output_RNN):
         self.LatentCircuit.train()
         x, predicted_output_lc = self.LatentCircuit(input, w_noise=True)
-        if self.penalty_type == 'l1':
-            p = 1
-        elif self.penalty_type == 'l2':
-            p = 2
-        else:
-            raise(ValueError(f"The penalty type {self.penalty_type} is not defined!"))
-        # loss = self.criterion(predicted_output_lc, predicted_output_RNN) / torch.var(predicted_output_RNN, unbiased=False) + \
-        #        self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, p)) + \
-        #        self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.input_layer.weight, 2)) + \
-        #        self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2))
-        loss = self.criterion(predicted_output_lc, predicted_output_RNN) + \
-               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, p)) + \
-               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.input_layer.weight, 2)) + \
-               self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, 2))
+        penalty_matching_dict = {"l1": 1, "l2": 2}
+        p = penalty_matching_dict[self.penalty_type]
 
+        behavioral_loss = self.lambda_behavior * self.criterion(predicted_output_lc, predicted_output_RNN)
+        regularization_penalty = self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, p)) + \
+                                 self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.input_layer.weight, p)) + \
+                                 self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.output_layer.weight, p))
         if self.encoding:
             x_emb = torch.einsum("ji, ikp->jkp", self.q, x)
-            loss += self.lambda_variance * self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
+            dynamics_matching_loss = self.criterion(x_emb, self.projection(y))
         else:
             y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
-            loss += self.lambda_variance * self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
+            dynamics_matching_loss = self.criterion(x, y_pr)
 
+        loss = dynamics_matching_loss + behavioral_loss + regularization_penalty
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        # projection back to constrained space
-        device = self.LatentCircuit.device
-        self.LatentCircuit.input_layer.weight.data *= self.LatentCircuit.inp_connectivity_mask.to(device)
-        self.LatentCircuit.output_layer.weight.data *= self.LatentCircuit.out_connectivity_mask.to(device)
-
-        # keeping the W_inp, W_out positive
-        self.LatentCircuit.input_layer.weight.data *= torch.tensor(self.LatentCircuit.input_layer.weight.data > 0)
-        self.LatentCircuit.output_layer.weight.data *= torch.tensor(self.LatentCircuit.output_layer.weight.data > 0)
-
-        self.LatentCircuit.recurrent_layer.weight.data *= self.LatentCircuit.rec_connectivity_mask.to(device)
-
-        if self.LatentCircuit.dale_mask is None:
-            pass
-        else:
-            self.LatentCircuit.output_layer.weight.data = torch.tensor(self.LatentCircuit.output_layer.weight.data * (self.LatentCircuit.dale_mask > 0))
-            self.LatentCircuit.recurrent_layer.weight.data = (torch.maximum(
-                self.LatentCircuit.recurrent_layer.weight.data * self.LatentCircuit.dale_mask.to(self.LatentCircuit.device),
-                torch.tensor(0)) * self.LatentCircuit.dale_mask.to(self.LatentCircuit.device)).to(self.LatentCircuit.device)
+        # apply constraints
+        self.apply_constraints()
         return loss.item()
 
     def eval_step(self, input, y, predicted_output_rnn):
         with torch.no_grad():
             self.LatentCircuit.eval()
             x, predicted_output_lc = self.LatentCircuit(input, w_noise=False)
-            val_loss = self.criterion(predicted_output_lc, predicted_output_rnn)
-
-            # val_loss = self.criterion(predicted_output_lc, predicted_output_rnn) / torch.var(predicted_output_rnn, unbiased=False) + \
-            #            self.lambda_w * torch.mean(torch.pow(self.LatentCircuit.recurrent_layer.weight, 2))
-            # if self.encoding:
-            #     x_emb = torch.einsum("ji, ikp->jkp", self.q, x)
-            #     val_loss += self.criterion(x_emb, self.projection(y)) / torch.var(self.projection(y), unbiased=False)
-            # else:
-            #     y_pr = torch.einsum("ij, ikp->jkp", self.q, self.projection(y))
-            #     val_loss += self.criterion(x, y_pr) / torch.var(y_pr, unbiased=False)
+            val_loss = self.criterion(predicted_output_lc, predicted_output_rnn) / torch.var(predicted_output_rnn, unbiased=True)
             return float(val_loss.cpu().numpy())
+
+    def apply_constraints(self):
+        # apply constraint with the masks controlling which connections are not allowed
+        self.LatentCircuit.recurrent_layer.weight.data *= self.LatentCircuit.rec_connectivity_mask.to(self.device)
+        self.LatentCircuit.output_layer.weight.data *= self.LatentCircuit.out_connectivity_mask.to(self.device)
+        self.LatentCircuit.input_layer.weight.data *= self.LatentCircuit.inp_connectivity_mask.to(self.device)
+
+        # keeping the W_inp, W_out positive
+        self.LatentCircuit.input_layer.weight.data[torch.tensor(self.LatentCircuit.input_layer.weight.data <= 0)] = self.min_weight
+        self.LatentCircuit.output_layer.weight.data[torch.tensor(self.LatentCircuit.output_layer.weight.data <= 0)] = self.min_weight
+
+        # # Dale's law
+        # if not (self.LatentCircuit.dale_mask is None):
+        #     # Dale mask is a vector of +1 and -1. If the sign of w_ij * Dale_j < 0 that means the constraint is violated
+        #     incorrect_rec_vals_mask = ((self.LatentCircuit.recurrent_layer.data * self.LatentCircuit.dale_mask) <= 0).to(self.device)
+        #     self.LatentCircuit.recurrent_layer.data[incorrect_rec_vals_mask] = self.min_weight
+        #
+        #     incorrect_out_vals_mask = ((self.LatentCircuit.output_layer.data * self.LatentCircuit.dale_mask) <= 0).to(self.device)
+        #     self.LatentCircuit.output_layer.data[incorrect_out_vals_mask] = self.min_weight
+
+        return None
 
     def run_training(self):
         train_losses = []

@@ -1,4 +1,5 @@
 LICENSE
+README.md
 setup.py
 latent_circuit_inference.egg-info/PKG-INFO
 latent_circuit_inference.egg-info/SOURCES.txt

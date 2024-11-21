@@ -12,7 +12,7 @@ import trainRNNbrain
 from trainRNNbrain.training.training_utils import prepare_task_arguments, get_training_mask
 from trainRNNbrain.rnns.RNN_torch import *
 from trainRNNbrain.rnns.RNN_numpy import *
-from trainRNNbrain.tasks import *
+from trainRNNbrain.tasks.TaskMemoryDM import TaskMemoryDM
 from trainRNNbrain.datasaver.DataSaver import *
 from latent_circuit_inference.LatentCircuit import LatentCircuit
 from latent_circuit_inference.LatentCircuitFitter import *
@@ -20,46 +20,34 @@ from latent_circuit_inference.LCAnalyzer import *
 from matplotlib import pyplot as plt
 from omegaconf import OmegaConf, DictConfig
 import hydra
-
-
-def set_paths(parent_folder):
-    from pathlib import Path
-    home = str(Path.home())
-    print(f"Home directory: {home}")
-    if home == '/home/pt1290':
-        project_folder = home
-        data_save_path = f'/../../../../scratch/gpfs/pt1290/latent_circuit_inference/data/inferred_LCs/{parent_folder}'
-        trained_RNNs_path = f'/../../../../scratch/gpfs/pt1290/trainRNNbrain/data/trained_RNNs/{parent_folder}'
-    elif home == '/Users/tolmach':
-        projects_folder = home + '/Documents/GitHub'
-        data_save_path = os.path.join(projects_folder, f'latent_circuit_inference/data/inferred_LCs/{parent_folder}')
-        trained_RNNs_path = os.path.join(projects_folder, f'trainRNNbrain/data/trained_RNNs/{parent_folder}')
-    else:
-        pass
-    os.makedirs(data_save_path, exist_ok=True)
-    return trained_RNNs_path, data_save_path
+from pathlib import Path
 
 OmegaConf.register_new_resolver("eval", eval)
 os.environ['HYDRA_FULL_ERROR'] = '1'
 show = False
-
-#either run the script from IDE with the first decorator
-# or run the script from shell like that:
-# 'python run_LCI.py +RNN_parent_folder="CDDM_relu_constrained\=True" +RNN_subfolder=\"0.00759_CDDM_relu\;N\=94\;lmbdo\=0.3\;orth_inp_only\=True\;lmbdr\=0.5\;lr\=0.005\;maxiter\=5000\" +n_units=8'
-# note the "\" symbols before "=" and ";"!
-@hydra.main(version_base="1.3", config_path="../../configs/", config_name=f"CDDM_relu")
-# @hydra.main(version_base="1.3", config_path="../../configs/", config_name=f"base")
+@hydra.main(version_base="1.3", config_path="../../configs/", config_name=f"MemoryDM_relu")
 def run_LCI(cfg: DictConfig) -> None:
-    RNN_parent_folder = cfg.RNN_parent_folder
-    RNN_subfolder = cfg.RNN_subfolder
-    taskname = RNN_parent_folder.split("_")[0]
-    activation_name = RNN_parent_folder.split("_")[1]
-    constrained = bool(RNN_parent_folder.split("_")[2].split("=")[1])
+    taskname = "MemoryDM"
+    activation_name = "relu"
+    activation_slope = 1.0
     print(cfg.n_units)
+    home = str(Path.home())
+    projects_folder = home + '/Documents/GitHub'
+    data_save_path = os.path.join(projects_folder, f'latent_circuit_inference/data/inferred_LCs/Jaiyi_RNN_LC')
+    # defining RNN
 
-    tag = f"{activation_name}_constrained={constrained}"
-    trained_RNNs_path, data_save_path = set_paths(parent_folder=RNN_parent_folder)
-    RNN_folder_full_path = os.path.join(trained_RNNs_path, RNN_subfolder)
+    path_to_file = "/Users/tolmach/Documents/GitHub/OvercomingBiases/data/auxiliary_data/rnn_perf_results_n6_m5_lx2_58489134.npy"
+    Jiayi_data = np.load(open(path_to_file, "rb"), allow_pickle=True).item()
+    rnn_data = {}
+    mask = np.arange(157)
+    rnn_data["tau"] = 10
+    rnn_data["dt"] = 1
+    rnn_data["N"] = Jiayi_data["net_params"]["win"].shape[0]
+    rnn_data["W_inp"] = Jiayi_data["net_params"]["win"]
+    rnn_data["W_rec"] = Jiayi_data["net_params"]["wrec"]
+    rnn_data["W_out"] = Jiayi_data["net_params"]["wout"]
+    sigma_rec = 0.03
+    sigma_inp = 0.03
 
     #loading other necessary configs:
     LC_model_conf = OmegaConf.load(os.path.join(cfg.configs_path,
@@ -77,47 +65,63 @@ def run_LCI(cfg: DictConfig) -> None:
     if not seed is None:
         rng.manual_seed(seed)
 
-    # defining RNN
-    RNN_conf = get_RNN_conf(RNN_folder_full_path)
-    rnn_data = get_RNN_data(RNN_folder_full_path)
-
     # Convert to a dictionary-like structure to allow dynamic key assignments
     cfg = OmegaConf.to_container(cfg, resolve=True)
     cfg = OmegaConf.create(cfg)
     cfg["LC_model"] = LC_model_conf
     cfg["task_specific_constraints"] = task_specific_conf
-    cfg["RNN_config"] = RNN_conf
 
     # defining the task
-    # a little crutch here:
-    cfg.RNN_config.task._target_ = f"trainRNNbrain.tasks.Task{taskname}.Task{taskname}"
-    task_conf = prepare_task_arguments(cfg_task=cfg.RNN_config.task, dt=cfg.LC_model.dt)
-    task = hydra.utils.instantiate(task_conf)
-    cfg["task"] = task_conf
-
-    activation_name = rnn_data["activation_name"]
-    activation_slope = rnn_data.get("activation_slope", 1.0 if activation_name != "sigmoid" else 7.5)
+    task = TaskMemoryDM(random_window=0)
 
     for i in range(cfg.n_repeats):
         rnn_torch = RNN_torch(N=rnn_data["N"],
                               dt=rnn_data["dt"], tau=rnn_data["tau"],
-                              exc_to_inh_ratio=cfg.RNN_config.model.exc_to_inh_ratio,
+                              exc_to_inh_ratio=4,
                               input_size=np.array(rnn_data["W_inp"]).shape[1],
                               output_size=np.array(rnn_data["W_out"]).shape[0],
                               activation_name=activation_name,
                               activation_slope=activation_slope,
                               seed=seed,
-                              constrained=constrained,
-                              sigma_rec=cfg.RNN_config.model.sigma_rec,
-                              sigma_inp=cfg.RNN_config.model.sigma_inp)
+                              sigma_rec=sigma_rec,
+                              sigma_inp=sigma_inp)
         RNN_params = {"W_inp": np.array(rnn_data["W_inp"]),
                       "W_rec": np.array(rnn_data["W_rec"]),
                       "W_out": np.array(rnn_data["W_out"]),
-                      "bias_rec": None if rnn_data["bias_rec"] is None else np.array(rnn_data["bias_rec"]),
+                      "bias_rec": None,
                       "y_init": np.zeros(rnn_data["N"]),
                       "activation_name": activation_name,
                       "activation_slope": activation_slope}
         rnn_torch.set_params(RNN_params)
+
+        # defining numpy RNN
+        RNN_building_params = RNN_params
+        for key in ["N", "dt", "tau"]:
+            RNN_building_params[key] = rnn_data[key]
+        N_RNN = rnn_data["N"]
+        RNN = RNN_numpy(**RNN_params)
+        RNN.y = np.zeros(N_RNN)
+
+        inputs, targets, conditions = task.get_batch()
+        batch_size = inputs.shape[2]
+        RNN.clear_history()
+        RNN.run(input_timeseries=inputs, sigma_rec=0, sigma_inp=0)
+        RNN_trajectories = RNN.get_history()
+        RNN_output = RNN.get_output()
+
+        print(f"MSE score of the original RNN: {np.mean((RNN_output - targets)**2)}")
+
+        # for i in range(inputs.shape[0]):
+        #     fig = plt.figure(figsize=(10, 3))
+        #     plt.plot(inputs[0, :, i], color = 'r')
+        #     plt.plot(inputs[1, :, i], color='blue')
+        #     plt.plot(inputs[2, :, i], color='green')
+        #     plt.plot(RNN_output[0, :, i], color='orange', linestyle='-')
+        #     plt.plot(RNN_output[1, :, i], color='black', linestyle='-')
+        #     plt.plot(targets[0, :, i], color='orange', linestyle='--')
+        #     plt.plot(targets[1, :, i], color='black', linestyle='--')
+        #     plt.grid(True)
+        #     plt.show()
 
         # defining LC
         lc = hydra.utils.instantiate(OmegaConf.merge(LC_model_conf, task_specific_conf))
@@ -135,7 +139,6 @@ def run_LCI(cfg: DictConfig) -> None:
                                      lr=cfg.LC_fitter.lr,
                                      criterion=criterion,
                                      lambda_w=cfg.LC_fitter.lambda_w,
-                                     lambda_behavior=cfg.LC_fitter.lambda_behavior,
                                      Qinitialization=cfg.LC_fitter.Qinitialization)
         lc_inferred, train_losses, val_losses, lc_params = fitter.run_training()
 
@@ -144,14 +147,6 @@ def run_LCI(cfg: DictConfig) -> None:
         circuit = RNN_numpy(**circuit_building_params)
         circuit.y = np.zeros(cfg.task_specific_constraints.N)
 
-        # defining numpy RNN
-        RNN_building_params = RNN_params
-        for key in ["N", "dt", "tau"]:
-            RNN_building_params[key] = rnn_data[key]
-        N_RNN = rnn_data["N"]
-        RNN = RNN_numpy(**RNN_params)
-        RNN.y = np.zeros(N_RNN)
-
         U = lc_params["U"]
         q = lc_params["q"]
         Q = U.T @ q
@@ -159,7 +154,6 @@ def run_LCI(cfg: DictConfig) -> None:
         node_labels = np.arange(lc_params["W_rec"].shape[0])
         analyzer = LCAnalyzer(circuit, labels=node_labels)
         input_batch_valid, target_batch_valid, conditions_valid = task.get_batch()
-        mask = get_training_mask(cfg.RNN_config.task, dt=lc_params["dt"])
 
         #MSE mse_score_RNN
         score_function = lambda x, y: np.mean((x - y) ** 2)
@@ -167,18 +161,13 @@ def run_LCI(cfg: DictConfig) -> None:
                                                   input_batch=input_batch_valid,
                                                   target_batch=target_batch_valid,
                                                   mask=mask,
-                                                  sigma_rec=cfg.RNN_config.model.sigma_rec,
-                                                  sigma_inp=cfg.RNN_config.model.sigma_inp)
+                                                  sigma_rec=sigma_rec,
+                                                  sigma_inp=sigma_inp)
         mse_score = np.round(mse_score, 8)
         print(f"MSE: {mse_score}")
 
         # Total variance
-        batch_size = input_batch_valid.shape[2]
-        RNN.clear_history()
         circuit.clear_history()
-        RNN.run(input_timeseries=input_batch_valid, sigma_rec=0, sigma_inp=0)
-        RNN_trajectories = RNN.get_history()
-        RNN_output = RNN.get_output()
         circuit.run(input_timeseries=input_batch_valid, sigma_rec=0, sigma_inp=0)
         lc_trajectories = circuit.get_history()
         lc_output = circuit.get_output()
@@ -192,7 +181,7 @@ def run_LCI(cfg: DictConfig) -> None:
         scores = {"mse_score": mse_score, "r2_tot":r2_tot, "r2_proj" : r2_proj}
         print(scores)
 
-        data_save_folder = os.path.join(data_save_path, cfg.RNN_subfolder, f"{r2_tot}_{r2_proj}_LC_{tag}")
+        data_save_folder = os.path.join(data_save_path, cfg.RNN_subfolder, f"{r2_tot}_{r2_proj}_LC")
         datasaver = DataSaver(data_save_folder)
         datasaver.save_data(scores, f"{r2_tot}_{r2_proj}_LC_scores.json")
 
@@ -215,7 +204,6 @@ def run_LCI(cfg: DictConfig) -> None:
                           save=True,
                           path=path)
 
-
         print(f"Plotting random trials")
         inds = np.random.choice(np.arange(input_batch_valid.shape[-1]), 10)
         inputs = input_batch_valid[..., inds]
@@ -223,7 +211,7 @@ def run_LCI(cfg: DictConfig) -> None:
         conditions = [conditions_valid[ind] for ind in inds]
         fig_trials = analyzer.plot_trials(inputs, targets, mask,
                                           conditions=conditions,
-                                          sigma_rec=RNN_conf.model.sigma_rec, sigma_inp=RNN_conf.model.sigma_inp)
+                                          sigma_rec=sigma_rec, sigma_inp=sigma_inp)
         datasaver.save_figure(fig_trials, f"{r2_tot}_{r2_proj}_LC_random_trials.png")
         if show: plt.show()
 
