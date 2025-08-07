@@ -1,6 +1,6 @@
 img/
 log/
-data/
+./data/
 style/
 .DS_Store
 */.DS_Store
