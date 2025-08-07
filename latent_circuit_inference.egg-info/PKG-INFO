@@ -1,9 +1,0 @@
-Metadata-Version: 2.1
-Name: latent-circuit-inference
-Version: 0.1
-Summary: Inferring low dimensional circuits from RNNs dynamics
-Home-page: ***
-Author: ***
-Author-email: ***
-License: MIT
-License-File: LICENSE

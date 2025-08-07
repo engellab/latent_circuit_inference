@@ -1,8 +1,0 @@
-LICENSE
-README.md
-setup.py
-latent_circuit_inference.egg-info/PKG-INFO
-latent_circuit_inference.egg-info/SOURCES.txt
-latent_circuit_inference.egg-info/dependency_links.txt
-latent_circuit_inference.egg-info/not-zip-safe
-latent_circuit_inference.egg-info/top_level.txt
